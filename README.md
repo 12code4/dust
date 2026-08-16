@@ -17,7 +17,19 @@ part — rediscoverable by the player as an in-game codex.
 
 ## Status
 
-📐 **Design phase.** No code yet — this repository currently contains the study and the blueprint.
+🏗️ **M0 shipped** — the falling-sand core is real: sand, water, wall, fire (+steam),
+deterministic fixed-timestep sim, 50,000-dot budget, 60 fps with ~3 ms/tick at full budget
+(target ≤ 8 ms). Next up: M1, the data-driven chemistry engine (docs/05).
+
+```bash
+npm install
+npm run dev     # play it (Vite dev server)
+npm test        # sim behavior + determinism/golden-frame suite
+npm run bench   # 50k-dot perf bench vs the 8 ms budget
+npm run smoke   # headless browser run + screenshot via Playwright
+```
+
+Draw with the left mouse button, erase with the right. `⏸/⏭` pause and single-step.
 
 ## The documents
 

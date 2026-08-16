@@ -1,0 +1,23 @@
+{
+  "name": "dust",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Dust — a falling-sand physics sandbox. Everything returns to dust.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "bench": "node --experimental-strip-types bench/bench.ts",
+    "smoke": "npm run build && node --experimental-strip-types scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "playwright": "^1.52.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.4"
+  }
+}

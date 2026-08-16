@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dust — M0</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --panel: #16181d;
+        --edge: #26292f;
+        --text: #c8ccd4;
+        --dim: #7c808a;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.4 ui-monospace, 'Cascadia Mono', Menlo, monospace;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 16px;
+        min-height: 100vh;
+      }
+      h1 { font-size: 15px; letter-spacing: 0.14em; font-weight: 600; }
+      h1 .sub { color: #7c808a; font-weight: 400; letter-spacing: 0; }
+      #toolbar, #controls {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+      }
+      button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--edge);
+        border-radius: 5px;
+        padding: 5px 11px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover { border-color: #3a3e46; }
+      button.active { border-color: #d8b45a; color: #d8b45a; }
+      button .swatch {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+      canvas {
+        width: 800px;
+        max-width: 100%;
+        image-rendering: pixelated;
+        border: 1px solid var(--edge);
+        border-radius: 4px;
+        cursor: crosshair;
+        touch-action: none;
+      }
+      #hud { color: #7c808a; display: flex; gap: 18px; }
+      #hud b { color: var(--text); font-weight: 600; }
+      .sep { width: 1px; align-self: stretch; background: var(--edge); }
+    </style>
+  </head>
+  <body>
+    <h1>DUST <span class="sub">— M0 · everything returns to dust</span></h1>
+    <div id="toolbar"></div>
+    <canvas id="view"></canvas>
+    <div id="controls"></div>
+    <div id="hud">
+      <span>dots <b id="dots">0</b>/<span id="budget"></span></span>
+      <span>fps <b id="fps">–</b></span>
+      <span>sim <b id="simms">–</b> ms</span>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
