@@ -86,6 +86,57 @@ describe('fire and steam', () => {
   })
 })
 
+describe('movement contracts (one move per particle per tick)', () => {
+  // These pin the `updated`-guard behavior directly. The golden hash also
+  // covers it, but the golden's documented workflow is "regenerate when a
+  // change is intended" — these tests make a guard regression loud even when
+  // bundled with an intentional change (verified: deleting the guard lets
+  // steam climb 6 rows in one tick while every other behavior test passes).
+
+  function findY(w: World, el: number): number {
+    for (let y = 0; y < w.h; y++)
+      for (let x = 0; x < w.w; x++) if (w.get(x, y) === el) return y
+    return -1
+  }
+
+  it('sand falls exactly one row per tick', () => {
+    const w = new World(9, 40, 5)
+    w.set(4, 0, SAND)
+    for (let t = 1; t <= 20; t++) {
+      w.step()
+      expect(findY(w, SAND)).toBe(t)
+    }
+  })
+
+  it('steam rises at most one row per tick', () => {
+    const w = new World(21, 60, 5)
+    w.set(10, 50, STEAM)
+    let prevY = 50
+    for (let t = 0; t < 30; t++) {
+      w.step()
+      const y = findY(w, STEAM)
+      expect(y).toBeGreaterThanOrEqual(prevY - 1) // never more than one row up
+      prevY = y
+    }
+  })
+
+  it('fire rises at most one row per tick, and does actually rise', () => {
+    const w = new World(21, 60, 5)
+    w.set(10, 55, FIRE)
+    let prevY = 55
+    let minY = 55
+    while (w.countOf(FIRE) > 0) {
+      w.step()
+      const y = findY(w, FIRE)
+      if (y === -1) break
+      expect(y).toBeGreaterThanOrEqual(prevY - 1)
+      prevY = y
+      if (y < minY) minY = y
+    }
+    expect(minY).toBeLessThan(45) // rose ≥10 rows within its lifetime
+  })
+})
+
 describe('world invariants', () => {
   it('enforces the dot budget', () => {
     const w = new World(100, 100, 1, 500)

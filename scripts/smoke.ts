@@ -56,6 +56,9 @@ try {
 
   if (stats.dots < 8000) throw new Error(`too few dots: ${stats.dots}`)
   if (stats.fps < 50) throw new Error(`fps too low: ${stats.fps.toFixed(1)}`)
+  // fps alone can't see a slow sim (the loop drops ticks before fps sags), so
+  // hold the sim itself to the docs/05 per-tick budget.
+  if (stats.simMs > 8) throw new Error(`sim too slow: ${stats.simMs.toFixed(2)} ms/tick`)
   console.log('SMOKE PASS')
 } finally {
   await browser.close()

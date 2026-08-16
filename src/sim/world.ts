@@ -10,9 +10,11 @@ import { EMPTY, WALL, SAND, WATER, FIRE, STEAM, isDot } from './elements.ts'
  *
  * Scan order (the Noita playbook, docs/05): bottom-up so falling matter lands
  * before the row above falls into it; horizontal direction alternates by
- * (row + frame) parity to avoid left/right bias. Rising matter (fire, steam)
- * moves into rows already scanned, so the `updated` guard is what keeps it to
- * one move per tick.
+ * (row + frame) parity to avoid left/right bias. Fallers move into rows the
+ * scan has already passed, so they can't be processed twice; rising matter
+ * (fire, steam) moves into rows NOT yet scanned, and the `updated` guard is
+ * what stops it from being re-processed there — without it a flame could climb
+ * the whole grid in one tick.
  */
 export class World {
   readonly w: number
@@ -176,17 +178,13 @@ export class World {
       this.swap(i, below) // sink
       return
     }
-    // Slide: try one random diagonal, then the other.
-    const d = this.rng.sign()
-    let nx = x + d
-    if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
-      this.moveTo(i, below + d)
-      return
-    }
-    nx = x - d
-    if (nx >= 0 && nx < this.w && this.cells[below - d] === EMPTY) {
-      this.moveTo(i, below - d)
-    }
+    // Slide. Check openness before drawing a direction: this path runs for
+    // every settled grain, and a draw only matters when both sides are open.
+    const le = x > 0 && this.cells[below - 1] === EMPTY
+    const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
+    if (!le && !re) return
+    const d = le && re ? this.rng.sign() : le ? -1 : 1
+    this.moveTo(i, below + d)
   }
 
   private updateWater(x: number, y: number, i: number): void {
@@ -196,15 +194,11 @@ export class World {
       return
     }
     if (y + 1 < this.h) {
-      const d = this.rng.sign()
-      let nx = x + d
-      if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
+      const le = x > 0 && this.cells[below - 1] === EMPTY
+      const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
+      if (le || re) {
+        const d = le && re ? this.rng.sign() : le ? -1 : 1
         this.moveTo(i, below + d)
-        return
-      }
-      nx = x - d
-      if (nx >= 0 && nx < this.w && this.cells[below - d] === EMPTY) {
-        this.moveTo(i, below - d)
         return
       }
     }
@@ -299,14 +293,21 @@ export class World {
     return n
   }
 
-  /** FNV-1a over cells+meta: the golden-frame fingerprint. */
+  /**
+   * FNV-1a over cells+meta+shade: the golden-frame fingerprint. Shade is
+   * deterministic state that travels with particles and drives rendering, so
+   * it belongs in the fingerprint — a shade-transport regression must not be
+   * able to hide behind matching cells/meta.
+   */
   hash(): number {
     let h = 0x811c9dc5
-    const { cells, meta } = this
+    const { cells, meta, shade } = this
     for (let i = 0; i < cells.length; i++) {
       h ^= cells[i]
       h = Math.imul(h, 0x01000193)
       h ^= meta[i]
+      h = Math.imul(h, 0x01000193)
+      h ^= shade[i]
       h = Math.imul(h, 0x01000193)
     }
     return h >>> 0

@@ -18,8 +18,9 @@ part — rediscoverable by the player as an in-game codex.
 ## Status
 
 🏗️ **M0 shipped** — the falling-sand core is real: sand, water, wall, fire (+steam),
-deterministic fixed-timestep sim, 50,000-dot budget, 60 fps with ~3 ms/tick at full budget
-(target ≤ 8 ms). Next up: M1, the data-driven chemistry engine (docs/05).
+deterministic fixed-timestep sim, 50,000-dot budget, 60 fps at ~2.2 ms/tick average
+(p95 2.6 ms) with the full budget live (target ≤ 8 ms). Next up: M1, the data-driven
+chemistry engine (docs/05).
 
 ```bash
 npm install

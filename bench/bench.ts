@@ -21,12 +21,27 @@ for (let y = 260; y < 264; y++) for (let x = 0; x < 400; x++) w.set(x, y, STEAM)
 
 console.log(`grid ${w.w}x${w.h}, dots: ${w.count}/${w.budget}`)
 
+/** Fire burns out in ≤71 ticks; relighting keeps the workload at ~50k active dots. */
+function reignite(): void {
+  for (let y = 240; y < 250; y++) for (let x = 0; x < 400; x++) w.set(x, y, FIRE)
+}
+
+// Unmeasured warm-up so JIT tiering (slow ticks #0–#10) doesn't pollute the gate.
+const WARMUP = 50
+for (let t = 0; t < WARMUP; t++) {
+  if (t % 50 === 0) reignite()
+  w.step()
+}
+
 const TICKS = 600
 const times: number[] = []
+let minDots = w.count
 for (let t = 0; t < TICKS; t++) {
+  if (t % 50 === 0) reignite()
   const t0 = performance.now()
   w.step()
   times.push(performance.now() - t0)
+  if (w.count < minDots) minDots = w.count
 }
 
 times.sort((a, b) => a - b)
@@ -35,10 +50,13 @@ const p50 = times[Math.floor(times.length * 0.5)]
 const p95 = times[Math.floor(times.length * 0.95)]
 const max = times[times.length - 1]
 
-console.log(`ticks: ${TICKS}, dots at end: ${w.count}`)
+console.log(`ticks: ${TICKS} (+${WARMUP} warm-up), dots: ${minDots}–${w.budget} live`)
 console.log(
   `ms/tick — avg ${avg.toFixed(3)}  p50 ${p50.toFixed(3)}  p95 ${p95.toFixed(3)}  max ${max.toFixed(3)}`,
 )
+// Gate on p95 as well as avg: a 60fps frame budget is per-tick, and an
+// avg-only gate would pass a build whose worst ticks drop frames.
 const BUDGET_MS = 8
-console.log(avg <= BUDGET_MS ? `PASS (avg ≤ ${BUDGET_MS} ms)` : `FAIL (avg > ${BUDGET_MS} ms)`)
-if (avg > BUDGET_MS) process.exit(1)
+const pass = avg <= BUDGET_MS && p95 <= BUDGET_MS
+console.log(pass ? `PASS (avg & p95 ≤ ${BUDGET_MS} ms)` : `FAIL (budget ${BUDGET_MS} ms)`)
+if (!pass) process.exit(1)

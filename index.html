@@ -53,8 +53,11 @@
         vertical-align: -1px;
       }
       canvas {
+        /* content-box keeps the 1px border outside the 800px content area, so
+           the 400-cell grid displays at an exact 2x integer scale */
+        box-sizing: content-box;
         width: 800px;
-        max-width: 100%;
+        max-width: calc(100% - 2px);
         image-rendering: pixelated;
         border: 1px solid var(--edge);
         border-radius: 4px;

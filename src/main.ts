@@ -83,10 +83,14 @@ let lastX = 0
 let lastY = 0
 
 function canvasPos(e: PointerEvent): [number, number] {
+  // Map through the content box: getBoundingClientRect() includes the border,
+  // which would skew clicks by up to half a cell at the edges.
   const rect = canvas.getBoundingClientRect()
+  const bx = e.clientX - rect.left - canvas.clientLeft
+  const by = e.clientY - rect.top - canvas.clientTop
   return [
-    Math.floor(((e.clientX - rect.left) / rect.width) * world.w),
-    Math.floor(((e.clientY - rect.top) / rect.height) * world.h),
+    Math.floor((bx / canvas.clientWidth) * world.w),
+    Math.floor((by / canvas.clientHeight) * world.h),
   ]
 }
 
@@ -102,7 +106,10 @@ function stroke(x0: number, y0: number, x1: number, y1: number): void {
   }
 }
 
+// Stroke state is a single slot, so only the primary pointer draws — a second
+// finger would otherwise interleave positions and paint streaks between them.
 canvas.addEventListener('pointerdown', (e) => {
+  if (!e.isPrimary) return
   e.preventDefault()
   canvas.setPointerCapture(e.pointerId)
   drawing = true
@@ -111,14 +118,18 @@ canvas.addEventListener('pointerdown', (e) => {
   stroke(lastX, lastY, lastX, lastY)
 })
 canvas.addEventListener('pointermove', (e) => {
-  if (!drawing) return
+  if (!drawing || !e.isPrimary) return
   const [x, y] = canvasPos(e)
   stroke(lastX, lastY, x, y)
   lastX = x
   lastY = y
 })
-canvas.addEventListener('pointerup', () => (drawing = false))
-canvas.addEventListener('pointercancel', () => (drawing = false))
+canvas.addEventListener('pointerup', (e) => {
+  if (e.isPrimary) drawing = false
+})
+canvas.addEventListener('pointercancel', (e) => {
+  if (e.isPrimary) drawing = false
+})
 canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 
 // ---- main loop: fixed 60 Hz sim, render every animation frame ------------
@@ -144,17 +155,19 @@ function frame(now: number): void {
 
   acc += dt
   let steps = 0
+  let stepped = 0 // ticks the sim actually ran — paused frames must not feed the EMA
   const t0 = performance.now()
   while (acc >= STEP_MS && steps < MAX_STEPS) {
     if (!paused || stepOnce) {
       world.step()
       stepOnce = false
+      stepped++
     }
     acc -= STEP_MS
     steps++
   }
   if (acc >= STEP_MS) acc = 0 // dropped ticks; keep real-time feel
-  if (steps > 0) simEma += ((performance.now() - t0) / steps - simEma) * 0.1
+  if (stepped > 0) simEma += ((performance.now() - t0) / stepped - simEma) * 0.1
 
   renderer.draw()
   dotsEl.textContent = String(world.count)
