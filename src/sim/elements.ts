@@ -12,8 +12,11 @@ export const STEAM = 5
 export const DUST = 6
 export const SMOKE = 7
 export const MUD = 8
+export const LAVA = 9
+export const STONE = 10
+export const GLASS = 11
 
-export const ELEMENT_COUNT = 9
+export const ELEMENT_COUNT = 12
 
 export const ELEMENT_NAMES = [
   'empty',
@@ -25,6 +28,9 @@ export const ELEMENT_NAMES = [
   'dust',
   'smoke',
   'mud',
+  'lava',
+  'stone',
+  'glass',
 ] as const
 
 /** Elements that count against the dot budget (walls are scenery, not dots). */
@@ -46,6 +52,9 @@ export const WINDAGE: readonly number[] = [
   1.0, // DUST — the namesake rides every draft
   0.85, // SMOKE
   0.05, // MUD — sticky, nearly windproof
+  0.02, // LAVA — molten rock ignores weather
+  0.02, // STONE
+  0, // GLASS — static
 ]
 
 /**
@@ -116,5 +125,26 @@ export const SHADES: ReadonlyArray<readonly [number, number, number][]> = [
     [0x70, 0x4d, 0x30],
     [0x84, 0x5d, 0x3c],
     [0x66, 0x45, 0x2a],
+  ],
+  // LAVA — molten glow
+  [
+    [0xff, 0x6a, 0x1a],
+    [0xef, 0x52, 0x10],
+    [0xff, 0x92, 0x33],
+    [0xdc, 0x40, 0x0a],
+  ],
+  // STONE — cold quarry greys
+  [
+    [0x8a, 0x8d, 0x93],
+    [0x7e, 0x81, 0x87],
+    [0x96, 0x99, 0x9f],
+    [0x72, 0x75, 0x7b],
+  ],
+  // GLASS — pale vitreous cyan
+  [
+    [0xb8, 0xd8, 0xdd],
+    [0xaa, 0xcc, 0xd4],
+    [0xc8, 0xe4, 0xe8],
+    [0x9c, 0xc0, 0xc8],
   ],
 ]

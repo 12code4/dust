@@ -48,8 +48,11 @@ try {
   // bonfires, timed so the deflagration flash lands in the frame.
   await page.evaluate(() => {
     const DUST = 6
+    const LAVA = 9
     window.dust.world.paintDisk(320, 25, 9, 3)
     for (let i = 0; i < 6; i++) window.dust.world.paintDisk(120 + i * 14, 150, 5, DUST)
+    // Lava onto the dune's right slope: glass streaks, fire tongues, smoke.
+    for (let i = 0; i < 3; i++) window.dust.world.paintDisk(215 + i * 8, 120, 4, LAVA)
     window.dust.renderer.flow = true
     const suck = () => window.dust.world.wind.addPressure(330, 200, -1.4, 20)
     const h = setInterval(suck, 16)

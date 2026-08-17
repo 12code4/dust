@@ -1,6 +1,19 @@
 import { World } from './sim/world.ts'
 import { Renderer } from './render/renderer.ts'
-import { WALL, SAND, WATER, FIRE, DUST, SMOKE, MUD, EMPTY, SHADES } from './sim/elements.ts'
+import {
+  WALL,
+  SAND,
+  WATER,
+  FIRE,
+  DUST,
+  SMOKE,
+  MUD,
+  LAVA,
+  STONE,
+  GLASS,
+  EMPTY,
+  SHADES,
+} from './sim/elements.ts'
 
 const world = new World(400, 300, 0xd05e ^ Date.now())
 const canvas = document.getElementById('view') as HTMLCanvasElement
@@ -16,10 +29,13 @@ const TOOLS: Tool[] = [
   { name: 'wall', el: WALL, density: 1 },
   { name: 'sand', el: SAND, density: 1 },
   { name: 'dust', el: DUST, density: 1 },
+  { name: 'stone', el: STONE, density: 1 },
   { name: 'water', el: WATER, density: 1 },
   { name: 'mud', el: MUD, density: 1 },
+  { name: 'lava', el: LAVA, density: 1 },
   { name: 'fire', el: FIRE, density: 0.3 },
   { name: 'smoke', el: SMOKE, density: 0.5 },
+  { name: 'glass', el: GLASS, density: 1 },
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
   { name: '🖐 drag', el: DRAG_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },

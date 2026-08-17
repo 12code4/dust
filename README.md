@@ -17,8 +17,16 @@ part — rediscoverable by the player as an in-game codex.
 
 ## Status
 
-🏗️ **The Namesake shipped (M2 complete)** — nine elements now: wall, sand, **dust**,
-water, **mud**, fire, **smoke**, steam. Dust is the star: it rides every draft, settles
+🏗️ **M1a: the Hot pack** — eleven elements: wall, sand, dust, stone, water, mud,
+**lava**, fire, smoke, steam, **glass**. Lava is the terrain printer: water quenches it to
+stone (plus steam), sand vitrifies to glass against it, mud kiln-fires to stone, dust
+ignites, and pools slowly crust over. Stone builds cliffs (falls straight, never slides),
+melts back in lava, erodes to sand under water, and a hard ballistic landing smashes it to
+sand. Glass shrugs off fire and lava, beads steam into droplets, and shatters back to sand
+under sharp pressure spikes. **The completeness gate is live**: element data + a registry
+of every special pair, with a behavior probe per pair in CI — an element without its full
+row fails the build (docs/04 §5, now enforced). Earlier: the Namesake (M2) — dust
+deflagration, smoke→soot, mud, and the ballistic drag tool. Dust is the star: it rides every draft, settles
 into caked drifts, wets into mud, and when it hangs thick near flame it **deflagrates** —
 a rolling flash that slams the pressure field and lofts more dust into the burn (settled
 dust only smolders; suspension time is tracked per grain). Fire exhales smoke; a little

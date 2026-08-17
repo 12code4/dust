@@ -10,6 +10,9 @@ import {
   DUST,
   SMOKE,
   MUD,
+  LAVA,
+  STONE,
+  GLASS,
   isDot,
   WINDAGE,
 } from './elements.ts'
@@ -178,6 +181,15 @@ export class World {
           case MUD:
             this.updateMud(x, y, i)
             break
+          case LAVA:
+            this.updateLava(x, y, i)
+            break
+          case STONE:
+            this.updateStone(x, y, i)
+            break
+          case GLASS:
+            this.updateGlass(x, y, i)
+            break
         }
       }
     }
@@ -284,14 +296,24 @@ export class World {
     const jy = (j / this.w) | 0
     const movedX = jx - x === (nx === 0 ? 0 : sx * nx)
     const movedY = jy - y === (ny === 0 ? 0 : sy * ny)
-    let nvx = vx === 0 ? 0 : vx - sx // friction, one quarter-cell per tick
-    let nvy = vy === 0 ? 0 : vy - sy
+    // Drag is horizontal-only for heavy matter: vertical friction would
+    // cancel gravity exactly and freeze every fall at terminal-crawl. Gases
+    // get gentle decay on both axes instead of gravity (below).
+    let nvx = vx === 0 ? 0 : vx - sx
+    let nvy = vy
     if (nx > 0 && !movedX) nvx = 0
     if (ny > 0 && !movedY) nvy = 0
     // Landing (blocked while moving down) with little sideways speed ends the
     // flight cleanly — otherwise gravity would re-arm a phantom 1-quarter-cell
     // velocity forever and the particle would never resume element behavior.
     const grounded = sy > 0 && ny > 0 && !movedY
+    // Hard landings break stone: a thrown boulder arrives as sand.
+    if (grounded && this.cells[j] === STONE && vy >= 12) {
+      this.cells[j] = SAND
+      this.impX[j] = 0
+      this.impY[j] = 0
+      return
+    }
     if (grounded && nvx >= -2 && nvx <= 2) {
       this.impX[j] = 0
       this.impY[j] = 0
@@ -299,7 +321,10 @@ export class World {
     }
     const el = this.cells[j]
     const gas = el === STEAM || el === SMOKE || el === FIRE
-    if (!gas && !grounded) {
+    if (gas) {
+      nvy = vy === 0 ? 0 : vy - sy // gases coast to a stop, no gravity
+      if (ny > 0 && !movedY) nvy = 0
+    } else if (!grounded) {
       nvy += 1 // gravity, a quarter-cell per tick²
       if (nvy > 31) nvy = 31
     }
@@ -385,18 +410,33 @@ export class World {
 
   private updateSand(x: number, y: number, i: number): void {
     if (this.windPush(x, y, i, WINDAGE[SAND])) return
-    // Wetting: water resting on sand slowly soaks the top layer into mud.
-    // (Checking only the cell above keeps settled sand to one extra read;
-    // mud then sinks through the pool and exposes the next layer.)
-    if (y > 0 && this.cells[i - this.w] === WATER && this.rng.chance(0.02)) {
-      this.cells[i] = MUD
-      this.meta[i] = 0
-      this.updated[i] = 1
-      return
+    // Vertical-contact reactions (one read for settled grains): water above
+    // soaks the top layer into mud; lava above vitrifies it to glass. Mud
+    // sinks / glass holds, exposing the next layer, so both spread downward.
+    if (y > 0) {
+      const above = this.cells[i - this.w]
+      if (above === WATER && this.rng.chance(0.02)) {
+        this.cells[i] = MUD
+        this.meta[i] = 0
+        this.updated[i] = 1
+        return
+      }
+      if (above === LAVA && this.rng.chance(0.35)) {
+        this.cells[i] = GLASS
+        this.meta[i] = 0
+        this.updated[i] = 1
+        return
+      }
     }
     if (y + 1 >= this.h) return
     const below = i + this.w
     const b = this.cells[below]
+    if (b === LAVA && this.rng.chance(0.35)) {
+      this.cells[i] = GLASS // poured into the melt
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
     if (b === EMPTY) {
       // A pinch of wobble, but only in TRUE freefall (two clear cells below):
       // a grain skimming a pile face has one empty below and must not jitter
@@ -574,6 +614,20 @@ export class World {
 
   private updateSteam(x: number, y: number, i: number): void {
     if (this.windPush(x, y, i, WINDAGE[STEAM])) return
+    // Condensation: steam touching glass beads into water on the pane.
+    const { w: ww, cells: cc } = this
+    if (
+      ((x > 0 && cc[i - 1] === GLASS) ||
+        (x + 1 < ww && cc[i + 1] === GLASS) ||
+        (y > 0 && cc[i - ww] === GLASS) ||
+        (y + 1 < this.h && cc[i + ww] === GLASS)) &&
+      this.rng.chance(0.12)
+    ) {
+      cc[i] = WATER
+      this.meta[i] = this.rng.next() & 1
+      this.updated[i] = 1
+      return
+    }
     const life = this.meta[i]
     if (life <= 1) {
       this.cells[i] = EMPTY
@@ -615,12 +669,13 @@ export class World {
     if (inAir) {
       if (this.meta[i] < 200) this.meta[i]++
     } else this.meta[i] = 0
-    // Ignition check — dust is the deflagration's actor.
+    // Ignition check — dust is the deflagration's actor. Lava counts as an
+    // ignition source just like open flame.
     const fireNear =
-      (x > 0 && cells[i - 1] === FIRE) ||
-      (x + 1 < w && cells[i + 1] === FIRE) ||
-      (y > 0 && cells[i - w] === FIRE) ||
-      (y + 1 < this.h && cells[i + w] === FIRE)
+      (x > 0 && (cells[i - 1] === FIRE || cells[i - 1] === LAVA)) ||
+      (x + 1 < w && (cells[i + 1] === FIRE || cells[i + 1] === LAVA)) ||
+      (y > 0 && (cells[i - w] === FIRE || cells[i - w] === LAVA)) ||
+      (y + 1 < this.h && (cells[i + w] === FIRE || cells[i + w] === LAVA))
     if (fireNear) {
       if (this.meta[i] >= 3 && this.suspendedDustNeighbors(x, y, i) >= 2) {
         // FLASH — the grain-silo moment. The pressure spike is the chain:
@@ -744,15 +799,152 @@ export class World {
     }
   }
 
-  /** Wet earth: heavy, sticky, nearly windproof. Fire bakes it back to sand. */
+  /**
+   * Molten rock: the terrain printer. Water quenches it to stone (and boils
+   * to steam), sand vitrifies against it, mud bakes to stone, dust ignites.
+   * It breathes heat into the air, flickers flame, and — left alone long
+   * enough — crusts over into stone on its own.
+   */
+  private updateLava(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    // R1, the classic: lava + water → stone + steam, at the interface.
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j >= 0 && cells[j] === WATER && this.rng.chance(0.85)) {
+        cells[j] = STEAM
+        this.meta[j] = 100 + this.rng.int(140)
+        this.updated[j] = 1
+        cells[i] = STONE
+        this.meta[i] = 0
+        this.updated[i] = 1
+        return
+      }
+    }
+    // Heat: gentler than open flame, but constant.
+    this.wind.perturb(x, y, (this.rng.int(21) - 10) * 0.001, -(5 + this.rng.int(16)) * 0.001)
+    if (this.rng.chance(0.02) && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
+      this.write(i - w, FIRE)
+      this.meta[i - w] = 8 + this.rng.int(10) // brief tongues of flame
+      this.count++
+      this.updated[i - w] = 1
+    }
+    // Crust over, eventually (trace rate — pools skin unevenly over ~a minute).
+    if (this.rng.chance(0.0002)) {
+      cells[i] = STONE
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
+    // Movement: a slow, viscous liquid.
+    const below = i + w
+    if (y + 1 < this.h && cells[below] === EMPTY) {
+      this.moveTo(i, below)
+      return
+    }
+    if (y + 1 < this.h) {
+      const le = x > 0 && cells[below - 1] === EMPTY
+      const re = x + 1 < w && cells[below + 1] === EMPTY
+      if ((le || re) && this.rng.chance(0.6)) {
+        const d = le && re ? this.rng.sign() : le ? -1 : 1
+        this.moveTo(i, below + d)
+        return
+      }
+    }
+    if (!this.rng.chance(0.4)) return // viscosity: often just sits
+    const dir = this.meta[i] === 0 ? -1 : 1
+    const ahead = x + dir >= 0 && x + dir < w ? cells[i + dir] : WALL
+    if (ahead === EMPTY) {
+      this.moveTo(i, i + dir)
+      return
+    }
+    const behind = x - dir >= 0 && x - dir < w ? cells[i - dir] : WALL
+    if (behind !== EMPTY) return
+    this.meta[i] = dir === -1 ? 1 : 0
+    this.moveTo(i, i - dir)
+  }
+
+  /**
+   * Falls dead straight and never slides — the cliff-builder. Smashes to
+   * sand on a hard ballistic landing, melts slowly in lava, and erodes to
+   * sand at a trace rate under running water. Mountains lose eventually.
+   */
+  private updateStone(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    if (y > 0 && cells[i - w] === WATER && this.rng.chance(0.0004)) {
+      cells[i] = SAND // erosion, the long game
+      this.updated[i] = 1
+      return
+    }
+    const nearLava =
+      (x > 0 && cells[i - 1] === LAVA) ||
+      (x + 1 < w && cells[i + 1] === LAVA) ||
+      (y > 0 && cells[i - w] === LAVA) ||
+      (y + 1 < this.h && cells[i + w] === LAVA)
+    if (nearLava && this.rng.chance(0.012)) {
+      cells[i] = LAVA // the mountain surrenders
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
+    if (y + 1 >= this.h) return
+    const below = i + w
+    const b = cells[below]
+    if (b === EMPTY) {
+      this.moveTo(i, below)
+      return
+    }
+    if (b === WATER && this.rng.chance(0.7)) {
+      this.swap(i, below)
+      return
+    }
+    if (b === LAVA && this.rng.chance(0.25)) {
+      this.swap(i, below) // submerges into the melt that is consuming it
+    }
+  }
+
+  /**
+   * Born from sand in lava's embrace. Sits perfectly still, lets steam bead
+   * on it, shrugs off fire and lava — but a sharp pressure spike (either
+   * sign) shatters it back to the sand it came from.
+   */
+  private updateGlass(x: number, y: number, i: number): void {
+    const p = this.wind.p[this.wind.cellIndex(x, y)]
+    if ((p > 2.8 || p < -2.8) && this.rng.chance(0.5)) {
+      this.cells[i] = SAND
+      this.meta[i] = 0
+      this.updated[i] = 1
+    }
+  }
+
+  /**
+   * Wet earth: heavy, sticky, nearly windproof. Fire dries it back to sand;
+   * lava fires it into stone — pottery, at geological temperature.
+   */
   private updateMud(x: number, y: number, i: number): void {
     const { w, cells } = this
-    const dryNear =
-      (x > 0 && cells[i - 1] === FIRE) ||
-      (x + 1 < w && cells[i + 1] === FIRE) ||
-      (y > 0 && cells[i - w] === FIRE) ||
-      (y + 1 < this.h && cells[i + w] === FIRE)
-    if (dryNear && this.rng.chance(0.03)) {
+    let fireNear = false
+    let lavaNear = false
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j < 0) continue
+      if (cells[j] === FIRE) fireNear = true
+      else if (cells[j] === LAVA) lavaNear = true
+    }
+    if (lavaNear && this.rng.chance(0.3)) {
+      cells[i] = STONE // kiln-fired
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
+    if (fireNear && this.rng.chance(0.03)) {
       cells[i] = SAND
       this.meta[i] = 0
       this.updated[i] = 1
