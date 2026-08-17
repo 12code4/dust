@@ -152,6 +152,26 @@ describe('wind on particles', () => {
   })
 })
 
+describe('falling clumps stay clumps', () => {
+  it('a water blob in freefall drifts a little but never sprays to the walls', () => {
+    const w = new World(120, 160, 6)
+    // 12-wide blob dropped from high up; the floor is ~150 rows below.
+    for (let y = 5; y < 11; y++) for (let x = 54; x < 66; x++) w.set(x, y, WATER)
+    for (let t = 0; t < 40; t++) w.step() // still airborne
+    let minX = 120
+    let maxX = 0
+    for (let y = 0; y < 160; y++)
+      for (let x = 0; x < 120; x++)
+        if (w.get(x, y) === WATER) {
+          if (x < minX) minX = x
+          if (x > maxX) maxX = x
+        }
+    // Wobble-drift widens it somewhat; the old bug spread it wall to wall.
+    expect(maxX - minX).toBeLessThan(40)
+    expect(w.countOf(WATER)).toBe(72)
+  })
+})
+
 describe('water freefall wobble', () => {
   it('a dripping stream spreads across several columns mid-air', () => {
     const w = new World(41, 80, 11)

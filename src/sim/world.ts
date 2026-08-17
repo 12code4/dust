@@ -213,10 +213,14 @@ export class World {
     const below = i + this.w
     const b = this.cells[below]
     if (b === EMPTY) {
-      // A pinch of freefall wobble: pours fan out organically instead of
-      // dropping in ruler-straight streams (subtler than water's — piles
-      // should still stack crisp).
-      if (this.rng.chance(0.12)) {
+      // A pinch of wobble, but only in TRUE freefall (two clear cells below):
+      // a grain skimming a pile face has one empty below and must not jitter
+      // off it, or every slope fizzes and pours flatten into wide fans.
+      if (
+        y + 2 < this.h &&
+        this.cells[below + this.w] === EMPTY &&
+        this.rng.chance(0.12)
+      ) {
         const d = this.rng.sign()
         const nx = x + d
         if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
@@ -231,11 +235,14 @@ export class World {
       this.swap(i, below) // sink
       return
     }
-    // Slide. Check openness before drawing a direction: this path runs for
-    // every settled grain, and a draw only matters when both sides are open.
+    // Slide, with friction: a grain on a steep ledge only topples sometimes,
+    // so piles come out textured and varied instead of relaxing instantly
+    // into identical razor-edged 45° pyramids. Openness is checked before any
+    // draw, so grains inside a settled pile still cost zero PRNG.
     const le = x > 0 && this.cells[below - 1] === EMPTY
     const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
     if (!le && !re) return
+    if (!this.rng.chance(0.5)) return
     const d = le && re ? this.rng.sign() : le ? -1 : 1
     this.moveTo(i, below + d)
   }
@@ -246,8 +253,13 @@ export class World {
     if (y + 1 < this.h && this.cells[below] === EMPTY) {
       // Freefall wobble (the PG look): streams shimmy and break apart instead
       // of dropping as rigid columns — an echo of PG's per-dot momentum in
-      // never-quite-still air.
-      if (this.rng.chance(0.3)) {
+      // never-quite-still air. True freefall only (two clear cells below), so
+      // droplets skimming a surface don't fizz sideways off it.
+      if (
+        y + 2 < this.h &&
+        this.cells[below + this.w] === EMPTY &&
+        this.rng.chance(0.3)
+      ) {
         const d = this.rng.sign()
         const nx = x + d
         if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
@@ -267,13 +279,30 @@ export class World {
         return
       }
     }
-    // Horizontal flow with direction memory and dispersion (up to 3 cells).
-    // Queueing beats ping-pong: blocked by fellow water ahead usually means
-    // "the stream is moving, hold your heading and wait your turn" — flipping
-    // on every block made queued particles wander backward against the flow
-    // and drain in stiff single-file. Blocked by a wall means turn around for
-    // real. Boxed in on both sides: rest with zero PRNG draws, so still pools
-    // stay bit-stable.
+    // Horizontal flow happens only when SUPPORTED — resting on floor, solid
+    // matter, or water that itself has something under it. A particle inside
+    // a falling clump (below it is water that's about to fall) must wait, not
+    // spread: without this gate, mid-air collisions sent falling blobs
+    // skating sideways until they hit the screen edges before ever landing.
+    // Clumps now fall as clumps; only landed water seeks its level.
+    if (y + 1 >= this.h) {
+      // resting on the world floor: supported
+    } else {
+      const b = this.cells[below]
+      if (b === WATER) {
+        const supported =
+          y + 2 >= this.h || this.cells[below + this.w] !== EMPTY
+        if (!supported) return // airborne clump: hold formation
+      }
+      // WALL/SAND under us = supported; EMPTY was handled by the fall branch.
+    }
+    // Direction memory + dispersion (up to 3 cells). Queueing beats
+    // ping-pong: blocked by fellow water ahead usually means "the stream is
+    // moving, hold your heading and wait your turn" — flipping on every block
+    // made queued particles wander backward against the flow and drain in
+    // stiff single-file. Blocked by a wall means turn around for real. Boxed
+    // in on both sides: rest with zero PRNG draws, so still pools stay
+    // bit-stable.
     const dir = this.meta[i] === 0 ? -1 : 1
     const ahead = x + dir >= 0 && x + dir < this.w ? this.cells[i + dir] : WALL
     if (ahead === EMPTY) {
