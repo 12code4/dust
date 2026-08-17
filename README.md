@@ -25,9 +25,10 @@ rides by windage, the 💨 wind tool blows (strength and reach scale with the pe
 and the 🌀 flow filter reveals (velocity vectors + red/blue pressure tint). The air is now
 a coupled velocity+pressure sim, PG/TPT-style: divergence builds pressure, gradients
 accelerate air, so jets grow wakes, blasts make waves, and low-pressure zones genuinely
-suck matter in. Fire drops local pressure (chimney draft). The wind tool streams
-continuously while held — press to anchor, drag the red aim line, strength scales with
-pen; right-click is a vacuum. Wind lingers, travels, and meets walls like real wind —
+suck matter in. Fire drops local pressure (chimney draft). The wind tool is a leaf
+blower: wind streams from the pointer along your stroke direction the whole time the
+button is held (a short red line shows the aim); right-click is a vacuum. Every element
+brush also keeps emitting while held, PG-pen style, and pen sizes run 0–9 like PG's. Wind lingers, travels, and meets walls like real wind —
 blocked, then fanning out along the face from the stagnation point. Falling water and sand
 shimmy like Powder Game's instead of dropping in rigid columns, and water queues behind its
 own flow instead of ping-ponging, so slopes and spouts drain fluidly. Next up: the Namesake

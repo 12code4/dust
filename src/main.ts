@@ -19,7 +19,7 @@ const TOOLS: Tool[] = [
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
 ]
-const PEN_SIZES = [1, 2, 4, 8, 16]
+const PEN_SIZES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] // PG's pen-s range
 
 let tool = TOOLS[1] // sand
 let pen = 4
@@ -102,17 +102,18 @@ function canvasPos(e: PointerEvent): [number, number] {
 }
 
 /**
- * Wind input, PG-style: press to anchor, drag to aim — a red line shows the
- * blow direction and strength, and wind streams continuously every sim tick
- * while the button is held. Right button with the wind tool is a VACUUM
- * (PG's air-decrease): a moving low-pressure zone that sucks matter toward
- * the cursor through the pressure field.
+ * Wind input: a leaf blower at the pointer. Wind exits from the CURRENT
+ * cursor position every sim tick while the button is held, aimed along the
+ * stroke's motion (holding still keeps blowing the last direction; strength
+ * scales with the pen, PG-style). Right button with the wind tool is a
+ * VACUUM (PG's air-decrease): a moving low-pressure zone that sucks matter
+ * toward the cursor through the pressure field.
  */
 const windInput = {
   active: false,
   mode: 'blow' as 'blow' | 'suck',
-  anchorX: 0,
-  anchorY: 0,
+  dirX: 0, // unit-ish aim from recent motion; zero until the first movement
+  dirY: 0,
   curX: 0,
   curY: 0,
 }
@@ -120,14 +121,29 @@ const windInput = {
 function pumpWind(): void {
   if (!windInput.active) return
   if (windInput.mode === 'suck') {
-    world.wind.addPressure(windInput.curX, windInput.curY, -(0.35 + pen * 0.1), pen * 4 + 8)
+    world.wind.addPressure(windInput.curX, windInput.curY, -(0.3 + pen * 0.18), pen * 3 + 8)
     return
   }
-  const k = 0.004 + pen * 0.002 // strength scales with pen (PG rule)
-  const clamp = (v: number) => (v > 3 ? 3 : v < -3 ? -3 : v)
-  const dvx = clamp((windInput.curX - windInput.anchorX) * k)
-  const dvy = clamp((windInput.curY - windInput.anchorY) * k)
-  world.wind.addImpulse(windInput.anchorX, windInput.anchorY, dvx, dvy, pen * 4 + 8)
+  if (windInput.dirX === 0 && windInput.dirY === 0) return // no aim yet
+  const s = 0.5 + pen * 0.28 // breath at pen 0, gale at pen 9
+  world.wind.addImpulse(
+    windInput.curX,
+    windInput.curY,
+    windInput.dirX * s,
+    windInput.dirY * s,
+    pen * 3 + 6,
+  )
+}
+
+/**
+ * Element brushes emit continuously too (PG's pen): while the button is held
+ * the brush re-stamps every sim tick at the pointer, so fire keeps burning,
+ * water keeps pouring, and sand keeps streaming as the pile drains away
+ * beneath the pen. Occupied cells no-op, so static stamps (wall) are free.
+ */
+function pumpPaint(): void {
+  if (!drawing) return
+  world.paintDisk(lastX, lastY, pen, erasing ? EMPTY : tool.el, erasing ? 1 : tool.density)
 }
 
 /** Stamp along the segment from the previous event so fast strokes stay solid. */
@@ -152,8 +168,8 @@ canvas.addEventListener('pointerdown', (e) => {
   if (tool.el === WIND_TOOL) {
     windInput.active = true
     windInput.mode = e.button === 2 ? 'suck' : 'blow'
-    windInput.anchorX = x
-    windInput.anchorY = y
+    windInput.dirX = 0
+    windInput.dirY = 0
     windInput.curX = x
     windInput.curY = y
     return
@@ -168,6 +184,13 @@ canvas.addEventListener('pointermove', (e) => {
   if (!e.isPrimary) return
   const [x, y] = canvasPos(e)
   if (windInput.active) {
+    const dx = x - windInput.curX
+    const dy = y - windInput.curY
+    const len = Math.hypot(dx, dy)
+    if (len > 0.5) {
+      windInput.dirX = dx / len
+      windInput.dirY = dy / len
+    }
     windInput.curX = x
     windInput.curY = y
     return
@@ -217,6 +240,7 @@ function frame(now: number): void {
   while (acc >= STEP_MS && steps < MAX_STEPS) {
     if (!paused || stepOnce) {
       pumpWind() // held wind/vacuum streams into every tick
+      pumpPaint() // held brushes keep emitting, PG-pen style
       world.step()
       stepOnce = false
       stepped++
@@ -227,15 +251,20 @@ function frame(now: number): void {
   if (acc >= STEP_MS) acc = 0 // dropped ticks; keep real-time feel
   if (stepped > 0) simEma += ((performance.now() - t0) / stepped - simEma) * 0.1
 
-  renderer.windLine =
-    windInput.active && windInput.mode === 'blow'
-      ? {
-          x0: windInput.anchorX,
-          y0: windInput.anchorY,
-          x1: windInput.curX,
-          y1: windInput.curY,
-        }
-      : null
+  // Aim indicator: a short red line from the pointer along the blow direction.
+  const aiming =
+    windInput.active &&
+    windInput.mode === 'blow' &&
+    (windInput.dirX !== 0 || windInput.dirY !== 0)
+  const reach = 8 + pen * 2
+  renderer.windLine = aiming
+    ? {
+        x0: windInput.curX,
+        y0: windInput.curY,
+        x1: windInput.curX + windInput.dirX * reach,
+        y1: windInput.curY + windInput.dirY * reach,
+      }
+    : null
   renderer.draw()
   dotsEl.textContent = String(world.count)
   fpsEl.textContent = fpsEma.toFixed(0)
