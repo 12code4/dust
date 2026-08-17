@@ -19,7 +19,8 @@ const TOOLS: Tool[] = [
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
 ]
-const PEN_SIZES = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] // PG's pen-s range
+const PEN_MIN = 0 // PG's pen-s range: 0–9
+const PEN_MAX = 9
 
 let tool = TOOLS[1] // sand
 let pen = 4
@@ -52,18 +53,19 @@ const toolButtons = TOOLS.map((t) => {
 })
 toolButtons[1].classList.add('active')
 
+// Compact pen-size stepper: [−] ●n [+] over PG's 0–9 range (also mouse wheel).
+const penLabel = document.createElement('span')
+penLabel.className = 'pen-label'
+function setPen(v: number): void {
+  pen = Math.max(PEN_MIN, Math.min(PEN_MAX, v))
+  penLabel.textContent = `●${pen}`
+}
 controls.append(
-  ...PEN_SIZES.map((s, idx) => {
-    const b = button(`●${s}`, (btn) => {
-      pen = s
-      controls.querySelectorAll('button.pen').forEach((x) => x.classList.remove('active'))
-      btn.classList.add('active')
-    })
-    b.classList.add('pen')
-    if (s === 4) b.classList.add('active')
-    return b
-  }),
+  button('−', () => setPen(pen - 1)),
+  penLabel,
+  button('+', () => setPen(pen + 1)),
 )
+setPen(pen)
 const sep = document.createElement('div')
 sep.className = 'sep'
 controls.append(
@@ -211,6 +213,14 @@ canvas.addEventListener('pointercancel', (e) => {
   windInput.active = false
 })
 canvas.addEventListener('contextmenu', (e) => e.preventDefault())
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault()
+    setPen(pen + (e.deltaY < 0 ? 1 : -1))
+  },
+  { passive: false },
+)
 
 // ---- main loop: fixed 60 Hz sim, render every animation frame ------------
 
