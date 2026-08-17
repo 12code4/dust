@@ -186,22 +186,28 @@ export class World {
     const wy = this.wind.vy[wi]
     const ax = wx < 0 ? -wx : wx
     const ay = wy < 0 ? -wy : wy
-    const m = (ax + ay) * windage
-    if (m < 0.05) return false
-    if (!this.rng.chance(m > 0.9 ? 0.9 : m)) return false
-    if (this.rng.chance(ax / (ax + ay))) {
-      const d = wx > 0 ? 1 : -1
-      const nx = x + d
-      if (nx >= 0 && nx < this.w && this.cells[i + d] === EMPTY) {
-        this.moveTo(i, i + d)
-        return true
-      }
-    } else {
-      const d = wy > 0 ? 1 : -1
-      const ny = y + d
-      if (ny >= 0 && ny < this.h && this.cells[i + d * this.w] === EMPTY) {
-        this.moveTo(i, i + d * this.w)
-        return true
+    const m = (ax + ay) * windage * 2
+    if (m < 0.08) return false
+    if (!this.rng.chance(m > 0.95 ? 0.95 : m)) return false
+    // Try the probabilistically-dominant axis; if that way is blocked, take
+    // the other — matter deflects around obstacles with the flow instead of
+    // pinning against them.
+    const horizFirst = this.rng.chance(ax / (ax + ay))
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (horizFirst === (attempt === 0)) {
+        const d = wx > 0 ? 1 : -1
+        const nx = x + d
+        if (ax > 0.02 && nx >= 0 && nx < this.w && this.cells[i + d] === EMPTY) {
+          this.moveTo(i, i + d)
+          return true
+        }
+      } else {
+        const d = wy > 0 ? 1 : -1
+        const ny = y + d
+        if (ay > 0.02 && ny >= 0 && ny < this.h && this.cells[i + d * this.w] === EMPTY) {
+          this.moveTo(i, i + d * this.w)
+          return true
+        }
       }
     }
     return false
@@ -324,14 +330,17 @@ export class World {
 
   private updateFire(x: number, y: number, i: number): void {
     // Fire breathes into the air field (PG's decompiled numbers, scaled to our
-    // grid): random sideways flutter, steady updraft. This is why smoke curls,
-    // steam sways, and a big blaze makes its own weather.
+    // grid): random sideways flutter, steady updraft, and a pressure DROP —
+    // PG's fire lowers local air pressure, so a blaze sucks air in at its
+    // base like a chimney. This is why smoke curls, steam sways, and a big
+    // blaze makes its own weather.
     this.wind.perturb(
       x,
       y,
       (this.rng.int(41) - 20) * 0.002,
       -(10 + this.rng.int(41)) * 0.002,
     )
+    this.wind.perturbP(x, y, -0.006)
     if (this.windPush(x, y, i, WINDAGE[FIRE])) return
     // Quench: touching water turns the flame into a puff of steam.
     const { w, cells } = this

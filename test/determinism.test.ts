@@ -7,7 +7,7 @@ import { SAND, WATER, FIRE, WALL } from '../src/sim/elements.ts'
  * intended to alter behavior, recompute (scripts in bench/golden style) and
  * update this constant in the same reviewed commit.
  */
-const GOLDEN_HASH = 0x6c9c2ecb
+const GOLDEN_HASH = 0x19a5c3b6
 
 /** A busy scripted scene: shelves, pours, and a fire — same for both worlds. */
 function script(w: World): void {

@@ -18,8 +18,16 @@ export class Wind {
   readonly ch: number
   vx: Float32Array
   vy: Float32Array
+  /**
+   * Pressure — the half of PG/TPT air that makes suction real. Velocity
+   * divergence builds it (inflow compresses), and its gradient accelerates
+   * air (high pushes toward low), so jets grow wakes, blasts make waves, and
+   * a low-pressure zone genuinely pulls matter in through the velocity field.
+   */
+  p: Float32Array
   private bx: Float32Array
   private by: Float32Array
+  private bp: Float32Array
   /** Wall-pixel count per air cell; any wall pixel makes the cell solid. */
   private readonly solidCount: Uint8Array
   readonly solid: Uint8Array
@@ -30,8 +38,10 @@ export class Wind {
     const n = this.cw * this.ch
     this.vx = new Float32Array(n)
     this.vy = new Float32Array(n)
+    this.p = new Float32Array(n)
     this.bx = new Float32Array(n)
     this.by = new Float32Array(n)
+    this.bp = new Float32Array(n)
     this.solidCount = new Uint8Array(n)
     this.solid = new Uint8Array(n)
   }
@@ -39,6 +49,7 @@ export class Wind {
   clear(): void {
     this.vx.fill(0)
     this.vy.fill(0)
+    this.p.fill(0)
     this.solidCount.fill(0)
     this.solid.fill(0)
   }
@@ -60,6 +71,32 @@ export class Wind {
     const i = this.cellIndex(px, py)
     this.vx[i] += dvx
     this.vy[i] += dvy
+  }
+
+  /** Add pressure directly to the cell containing (px, py). */
+  perturbP(px: number, py: number, dp: number): void {
+    this.p[this.cellIndex(px, py)] += dp
+  }
+
+  /**
+   * Inject pressure around (px, py) with linear falloff — negative for a
+   * vacuum (PG's air-decrease tool), positive spikes for explosions.
+   */
+  addPressure(px: number, py: number, dp: number, radius: number): void {
+    const cr = Math.max(1, Math.round(radius / Wind.CELL))
+    const cx = px >> 2
+    const cy = py >> 2
+    for (let dy = -cr; dy <= cr; dy++) {
+      const y = cy + dy
+      if (y < 0 || y >= this.ch) continue
+      for (let dx = -cr; dx <= cr; dx++) {
+        const x = cx + dx
+        if (x < 0 || x >= this.cw) continue
+        const d2 = dx * dx + dy * dy
+        if (d2 > cr * cr) continue
+        this.p[y * this.cw + x] += dp * (1 - Math.sqrt(d2) / (cr + 1))
+      }
+    }
   }
 
   /**
@@ -87,10 +124,64 @@ export class Wind {
   }
 
   step(): void {
-    const { cw, ch, vx, vy, bx, by, solid } = this
+    const { cw, ch, vx, vy, p, bx, by, bp, solid } = this
     const DIFFUSE = 0.25 // low spread keeps gusts coherent so they travel far
     const DECAY = 0.985 // slow decay makes wind linger (half-life ≈ 46 ticks)
     const MAX = 3 // clamp (air cells per tick) — keeps the field stable
+    const PDIFFUSE = 0.2
+    const PDECAY = 0.96
+    const PMAX = 6
+    const DIV_TO_P = 0.35 // inflow compresses → pressure rises
+    const GRAD_TO_V = 0.12 // pressure gradient accelerates air (high → low)
+    // (DIV_TO_P × GRAD_TO_V sets the acoustic feedback; ≈0.04 stays stable
+    //  under the decay terms and gives visible waves and wakes.)
+
+    // 0a. Pressure evolves: diffusion + divergence source + decay, buffered.
+    for (let y = 0; y < ch; y++) {
+      const row = y * cw
+      for (let x = 0; x < cw; x++) {
+        const i = row + x
+        if (solid[i]) {
+          bp[i] = 0
+          continue
+        }
+        const pl = x > 0 ? p[i - 1] : 0
+        const pr = x < cw - 1 ? p[i + 1] : 0
+        const pu = y > 0 ? p[i - cw] : 0
+        const pd = y < ch - 1 ? p[i + cw] : 0
+        const div =
+          ((x < cw - 1 ? vx[i + 1] : 0) -
+            (x > 0 ? vx[i - 1] : 0) +
+            (y < ch - 1 ? vy[i + cw] : 0) -
+            (y > 0 ? vy[i - cw] : 0)) /
+          2
+        let np =
+          (p[i] * (1 - PDIFFUSE) + ((pl + pr + pu + pd) / 4) * PDIFFUSE - div * DIV_TO_P) *
+          PDECAY
+        if (np > PMAX) np = PMAX
+        else if (np < -PMAX) np = -PMAX
+        bp[i] = np > 0.001 || np < -0.001 ? np : 0
+      }
+    }
+    this.p = this.bp
+    this.bp = p
+    const np = this.p
+
+    // 0b. Pressure gradient accelerates the air: this is where suction comes
+    //     from — a low-pressure zone pulls the surrounding field inward.
+    for (let y = 0; y < ch; y++) {
+      const row = y * cw
+      for (let x = 0; x < cw; x++) {
+        const i = row + x
+        if (solid[i]) continue
+        const pl = x > 0 && !solid[i - 1] ? np[i - 1] : np[i]
+        const pr = x < cw - 1 && !solid[i + 1] ? np[i + 1] : np[i]
+        const pu = y > 0 && !solid[i - cw] ? np[i - cw] : np[i]
+        const pd = y < ch - 1 && !solid[i + cw] ? np[i + cw] : np[i]
+        vx[i] += (pl - pr) * GRAD_TO_V
+        vy[i] += (pu - pd) * GRAD_TO_V
+      }
+    }
 
     // 1. Diffuse + decay into the back buffer. Diffusion runs BEFORE advection
     //    on purpose: a fresh point impulse (one wind-tool flick) is a delta

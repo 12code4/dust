@@ -22,7 +22,12 @@ part — rediscoverable by the player as an in-game codex.
 average (p95 3.7 ms) with the full budget live (target ≤ 8 ms). The air field (M2's soul)
 landed early: a 4×4-px-cell velocity grid that fire feeds with convection, everything
 rides by windage, the 💨 wind tool blows (strength and reach scale with the pen, PG-style),
-and the 🌀 flow filter reveals. Wind lingers, travels, and meets walls like real wind —
+and the 🌀 flow filter reveals (velocity vectors + red/blue pressure tint). The air is now
+a coupled velocity+pressure sim, PG/TPT-style: divergence builds pressure, gradients
+accelerate air, so jets grow wakes, blasts make waves, and low-pressure zones genuinely
+suck matter in. Fire drops local pressure (chimney draft). The wind tool streams
+continuously while held — press to anchor, drag the red aim line, strength scales with
+pen; right-click is a vacuum. Wind lingers, travels, and meets walls like real wind —
 blocked, then fanning out along the face from the stagnation point. Falling water and sand
 shimmy like Powder Game's instead of dropping in rigid columns, and water queues behind its
 own flow instead of ping-ponging, so slopes and spouts drain fluidly. Next up: the Namesake

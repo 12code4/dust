@@ -101,16 +101,37 @@ function canvasPos(e: PointerEvent): [number, number] {
   ]
 }
 
-/** Stamp along the segment from the previous event so fast strokes stay solid. */
-function stroke(x0: number, y0: number, x1: number, y1: number): void {
-  if (!erasing && tool.el === WIND_TOOL) {
-    // Blow along the drag: direction from the stroke; both strength and reach
-    // scale with the pen (PG: wind "strength depending on the pen-size").
-    const k = 0.05 + pen * 0.015
-    const clamp = (v: number) => (v > 3 ? 3 : v < -3 ? -3 : v)
-    world.wind.addImpulse(x1, y1, clamp((x1 - x0) * k), clamp((y1 - y0) * k), pen * 4 + 6)
+/**
+ * Wind input, PG-style: press to anchor, drag to aim — a red line shows the
+ * blow direction and strength, and wind streams continuously every sim tick
+ * while the button is held. Right button with the wind tool is a VACUUM
+ * (PG's air-decrease): a moving low-pressure zone that sucks matter toward
+ * the cursor through the pressure field.
+ */
+const windInput = {
+  active: false,
+  mode: 'blow' as 'blow' | 'suck',
+  anchorX: 0,
+  anchorY: 0,
+  curX: 0,
+  curY: 0,
+}
+
+function pumpWind(): void {
+  if (!windInput.active) return
+  if (windInput.mode === 'suck') {
+    world.wind.addPressure(windInput.curX, windInput.curY, -(0.35 + pen * 0.1), pen * 4 + 8)
     return
   }
+  const k = 0.004 + pen * 0.002 // strength scales with pen (PG rule)
+  const clamp = (v: number) => (v > 3 ? 3 : v < -3 ? -3 : v)
+  const dvx = clamp((windInput.curX - windInput.anchorX) * k)
+  const dvy = clamp((windInput.curY - windInput.anchorY) * k)
+  world.wind.addImpulse(windInput.anchorX, windInput.anchorY, dvx, dvy, pen * 4 + 8)
+}
+
+/** Stamp along the segment from the previous event so fast strokes stay solid. */
+function stroke(x0: number, y0: number, x1: number, y1: number): void {
   const el = erasing ? EMPTY : tool.el
   const density = erasing ? 1 : tool.density
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1)
@@ -127,23 +148,44 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!e.isPrimary) return
   e.preventDefault()
   canvas.setPointerCapture(e.pointerId)
+  const [x, y] = canvasPos(e)
+  if (tool.el === WIND_TOOL) {
+    windInput.active = true
+    windInput.mode = e.button === 2 ? 'suck' : 'blow'
+    windInput.anchorX = x
+    windInput.anchorY = y
+    windInput.curX = x
+    windInput.curY = y
+    return
+  }
   drawing = true
   erasing = e.button === 2
-  ;[lastX, lastY] = canvasPos(e)
+  lastX = x
+  lastY = y
   stroke(lastX, lastY, lastX, lastY)
 })
 canvas.addEventListener('pointermove', (e) => {
-  if (!drawing || !e.isPrimary) return
+  if (!e.isPrimary) return
   const [x, y] = canvasPos(e)
+  if (windInput.active) {
+    windInput.curX = x
+    windInput.curY = y
+    return
+  }
+  if (!drawing) return
   stroke(lastX, lastY, x, y)
   lastX = x
   lastY = y
 })
 canvas.addEventListener('pointerup', (e) => {
-  if (e.isPrimary) drawing = false
+  if (!e.isPrimary) return
+  drawing = false
+  windInput.active = false
 })
 canvas.addEventListener('pointercancel', (e) => {
-  if (e.isPrimary) drawing = false
+  if (!e.isPrimary) return
+  drawing = false
+  windInput.active = false
 })
 canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 
@@ -174,6 +216,7 @@ function frame(now: number): void {
   const t0 = performance.now()
   while (acc >= STEP_MS && steps < MAX_STEPS) {
     if (!paused || stepOnce) {
+      pumpWind() // held wind/vacuum streams into every tick
       world.step()
       stepOnce = false
       stepped++
@@ -184,6 +227,15 @@ function frame(now: number): void {
   if (acc >= STEP_MS) acc = 0 // dropped ticks; keep real-time feel
   if (stepped > 0) simEma += ((performance.now() - t0) / stepped - simEma) * 0.1
 
+  renderer.windLine =
+    windInput.active && windInput.mode === 'blow'
+      ? {
+          x0: windInput.anchorX,
+          y0: windInput.anchorY,
+          x1: windInput.curX,
+          y1: windInput.curY,
+        }
+      : null
   renderer.draw()
   dotsEl.textContent = String(world.count)
   fpsEl.textContent = fpsEma.toFixed(0)

@@ -43,13 +43,17 @@ try {
   await light()
   await page.waitForTimeout(500)
   await light()
-  // Drop a water blob so the shot catches a stream mid-wobble, and turn on the
-  // flow filter so the bonfires' updraft is visible in the frame.
+  // Drop a water blob so the shot catches a stream mid-wobble, turn on the
+  // flow filter, and run a vacuum over the sand dune so the shot shows
+  // pressure suction (blue tint, inward vectors, lofted grains).
   await page.evaluate(() => {
     window.dust.world.paintDisk(320, 25, 9, 3)
     window.dust.renderer.flow = true
+    const suck = () => window.dust.world.wind.addPressure(130, 145, -1.6, 24)
+    const h = setInterval(suck, 16)
+    setTimeout(() => clearInterval(h), 1400)
   })
-  await page.waitForTimeout(250)
+  await page.waitForTimeout(1500)
 
   const stats = await page.evaluate(() => window.dust.stats())
   console.log(

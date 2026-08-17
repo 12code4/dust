@@ -10,6 +10,8 @@ import type { World } from '../sim/world.ts'
 export class Renderer {
   /** The flow filter: reveal the (otherwise invisible) air field as vectors. */
   flow = false
+  /** PG's red line: the wind tool's aim, drawn while the button is held. */
+  windLine: { x0: number; y0: number; x1: number; y1: number } | null = null
   private readonly ctx: CanvasRenderingContext2D
   private readonly image: ImageData
   private readonly pixels: Uint32Array
@@ -49,13 +51,36 @@ export class Renderer {
     }
     this.ctx.putImageData(this.image, 0, 0)
     if (this.flow) this.drawFlow()
+    if (this.windLine) {
+      const { x0, y0, x1, y1 } = this.windLine
+      const ctx = this.ctx
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.9)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(x0 + 0.5, y0 + 0.5)
+      ctx.lineTo(x1 + 0.5, y1 + 0.5)
+      ctx.stroke()
+    }
   }
 
-  /** BG-line's heir: one short vector per air cell that's actually moving. */
+  /**
+   * BG-line's heir: pressure as a red (high) / blue (low) tint, and one short
+   * vector per air cell that's actually moving.
+   */
   private drawFlow(): void {
     const { wind } = this.world
     const ctx = this.ctx
     const cell = 4
+    for (let cy = 0; cy < wind.ch; cy++) {
+      for (let cx = 0; cx < wind.cw; cx++) {
+        const p = wind.p[cy * wind.cw + cx]
+        if (p > 0.25 || p < -0.25) {
+          const a = Math.min(0.35, Math.abs(p) * 0.1)
+          ctx.fillStyle = p > 0 ? `rgba(255,90,60,${a})` : `rgba(70,130,255,${a})`
+          ctx.fillRect(cx * cell, cy * cell, cell, cell)
+        }
+      }
+    }
     ctx.strokeStyle = 'rgba(110, 210, 255, 0.55)'
     ctx.lineWidth = 1
     ctx.beginPath()

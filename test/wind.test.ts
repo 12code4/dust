@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { World } from '../src/sim/world.ts'
 import { Wind } from '../src/sim/wind.ts'
-import { WALL, WATER, FIRE, STEAM } from '../src/sim/elements.ts'
+import { WALL, SAND, WATER, FIRE, STEAM } from '../src/sim/elements.ts'
 
 function centroidX(w: World, el: number): number {
   let sum = 0
@@ -21,6 +21,7 @@ describe('wind field', () => {
     const b = new Wind(120, 90)
     for (const wind of [a, b]) {
       wind.addImpulse(60, 45, 2, -1, 20)
+      wind.addPressure(80, 30, -2, 12)
       for (let t = 0; t < 50; t++) {
         wind.step()
         if (t === 25) wind.addImpulse(30, 60, -1.5, 0.5, 12)
@@ -28,16 +29,33 @@ describe('wind field', () => {
     }
     expect(a.vx).toEqual(b.vx)
     expect(a.vy).toEqual(b.vy)
+    expect(a.p).toEqual(b.p)
   })
 
-  it('decays back to a dead calm', () => {
+  it('decays back to a dead calm, even after a pressure blast', () => {
     const wind = new Wind(120, 90)
     wind.addImpulse(60, 45, 3, 3, 30)
-    for (let t = 0; t < 400; t++) wind.step()
+    wind.addPressure(60, 45, 6, 24) // explosion-sized spike
+    for (let t = 0; t < 500; t++) wind.step()
     for (let i = 0; i < wind.vx.length; i++) {
       expect(Math.abs(wind.vx[i])).toBeLessThan(0.01)
       expect(Math.abs(wind.vy[i])).toBeLessThan(0.01)
+      expect(Math.abs(wind.p[i])).toBeLessThan(0.01)
     }
+  })
+
+  it('a low-pressure zone sucks the surrounding air inward', () => {
+    const wind = new Wind(120, 90)
+    for (let t = 0; t < 10; t++) {
+      wind.addPressure(60, 45, -1.5, 10) // sustained vacuum, like the tool
+      wind.step()
+    }
+    // Left of the vacuum air flows right (toward it); right of it flows left.
+    expect(wind.vx[wind.cellIndex(44, 45)]).toBeGreaterThan(0.05)
+    expect(wind.vx[wind.cellIndex(76, 45)]).toBeLessThan(-0.05)
+    // Above it flows down; below it flows up.
+    expect(wind.vy[wind.cellIndex(60, 29)]).toBeGreaterThan(0.05)
+    expect(wind.vy[wind.cellIndex(60, 61)]).toBeLessThan(-0.05)
   })
 
   it('gusts spread to neighboring cells (diffusion)', () => {
@@ -118,6 +136,21 @@ describe('water flows like a stream, not a queue of soldiers', () => {
 })
 
 describe('wind on particles', () => {
+  it('a strong crosswind shoves settled sand off its pile', () => {
+    const w = new World(80, 40, 7)
+    for (let y = 32; y < 40; y++) for (let x = 10; x < 30; x++) w.set(x, y, SAND)
+    for (let t = 0; t < 100; t++) w.step() // let it settle
+    for (let t = 0; t < 80; t++) {
+      w.wind.addImpulse(18, 30, 2.5, 0, 20) // gale across the pile's top
+      w.step()
+    }
+    let displaced = 0
+    for (let y = 0; y < 40; y++)
+      for (let x = 34; x < 80; x++) if (w.get(x, y) === SAND) displaced++
+    expect(displaced).toBeGreaterThan(10) // grains blown well past the pile
+    expect(w.countOf(SAND)).toBe(160)
+  })
+
   it('steam rides a crosswind', () => {
     const w = new World(120, 60, 9)
     w.paintDisk(30, 40, 5, STEAM)
