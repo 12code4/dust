@@ -21,8 +21,11 @@ part — rediscoverable by the player as an in-game codex.
 (+steam), deterministic fixed-timestep sim, 50,000-dot budget, 60 fps at ~2.8 ms/tick
 average (p95 3.7 ms) with the full budget live (target ≤ 8 ms). The air field (M2's soul)
 landed early: a 4×4-px-cell velocity grid that fire feeds with convection, everything
-rides by windage, the 💨 wind tool blows, and the 🌀 flow filter reveals. Falling water
-shimmies like Powder Game's instead of dropping in rigid columns. Next up: the Namesake
+rides by windage, the 💨 wind tool blows (strength and reach scale with the pen, PG-style),
+and the 🌀 flow filter reveals. Wind lingers, travels, and meets walls like real wind —
+blocked, then fanning out along the face from the stagnation point. Falling water and sand
+shimmy like Powder Game's instead of dropping in rigid columns, and water queues behind its
+own flow instead of ping-ponging, so slopes and spouts drain fluidly. Next up: the Namesake
 update (dust + deflagration + drag), then M1's data-driven chemistry engine (docs/05).
 
 **Just want to play?** Grab [`dust.html`](dust.html) — the whole game in one

@@ -20,6 +20,9 @@ export class Wind {
   vy: Float32Array
   private bx: Float32Array
   private by: Float32Array
+  /** Wall-pixel count per air cell; any wall pixel makes the cell solid. */
+  private readonly solidCount: Uint8Array
+  readonly solid: Uint8Array
 
   constructor(w: number, h: number) {
     this.cw = Math.ceil(w / Wind.CELL)
@@ -29,11 +32,22 @@ export class Wind {
     this.vy = new Float32Array(n)
     this.bx = new Float32Array(n)
     this.by = new Float32Array(n)
+    this.solidCount = new Uint8Array(n)
+    this.solid = new Uint8Array(n)
   }
 
   clear(): void {
     this.vx.fill(0)
     this.vy.fill(0)
+    this.solidCount.fill(0)
+    this.solid.fill(0)
+  }
+
+  /** Track wall pixels so the air field knows where it cannot blow. */
+  setSolidPixel(px: number, py: number, on: boolean): void {
+    const i = this.cellIndex(px, py)
+    this.solidCount[i] += on ? 1 : -1
+    this.solid[i] = this.solidCount[i] > 0 ? 1 : 0
   }
 
   /** Air-cell index for a particle position (pixel coords). */
@@ -73,9 +87,9 @@ export class Wind {
   }
 
   step(): void {
-    const { cw, ch, vx, vy, bx, by } = this
-    const DIFFUSE = 0.35 // share blended from the 4-neighborhood
-    const DECAY = 0.97 // calm always returns
+    const { cw, ch, vx, vy, bx, by, solid } = this
+    const DIFFUSE = 0.25 // low spread keeps gusts coherent so they travel far
+    const DECAY = 0.985 // slow decay makes wind linger (half-life ≈ 46 ticks)
     const MAX = 3 // clamp (air cells per tick) — keeps the field stable
 
     // 1. Diffuse + decay into the back buffer. Diffusion runs BEFORE advection
@@ -87,6 +101,13 @@ export class Wind {
       const row = y * cw
       for (let x = 0; x < cw; x++) {
         const i = row + x
+        if (solid[i]) {
+          // Walls hold no air. (Their zeros also starve neighbors' averages,
+          // which reads as drag along surfaces — acceptable and even apt.)
+          bx[i] = 0
+          by[i] = 0
+          continue
+        }
         const l = x > 0 ? vx[i - 1] : 0
         const r = x < cw - 1 ? vx[i + 1] : 0
         const u = y > 0 ? vx[i - cw] : 0
@@ -112,6 +133,11 @@ export class Wind {
       const row = y * cw
       for (let x = 0; x < cw; x++) {
         const i = row + x
+        if (solid[i]) {
+          vx[i] = 0
+          vy[i] = 0
+          continue
+        }
         let sx = x - bx[i]
         let sy = y - by[i]
         if (sx < 0) sx = 0
@@ -135,6 +161,48 @@ export class Wind {
         // Snap the last whisper to zero so settled air costs nothing downstream.
         vx[i] = nvx > 0.001 || nvx < -0.001 ? nvx : 0
         vy[i] = nvy > 0.001 || nvy < -0.001 ? nvy : 0
+      }
+    }
+
+    // 3. Deflection at walls (no-penetration + escape, like real wind): a
+    //    velocity component pointing into an adjacent solid cell is killed,
+    //    and most of its magnitude spills into BOTH tangential neighbors,
+    //    pushing away from the impact — a jet hitting a wall fans out along
+    //    the face from the stagnation point instead of simply dying.
+    const SPILL = 0.35 // per side; 2×0.35 = 70% of blocked momentum escapes
+    for (let y = 0; y < ch; y++) {
+      const row = y * cw
+      for (let x = 0; x < cw; x++) {
+        const i = row + x
+        if (solid[i]) continue
+        let blocked = 0
+        const wx = vx[i]
+        if (wx > 0 && x < cw - 1 && solid[i + 1]) {
+          blocked += wx
+          vx[i] = 0
+        } else if (wx < 0 && x > 0 && solid[i - 1]) {
+          blocked += -wx
+          vx[i] = 0
+        }
+        if (blocked > 0) {
+          const spill = blocked * SPILL
+          if (y > 0 && !solid[i - cw]) vy[i - cw] -= spill
+          if (y < ch - 1 && !solid[i + cw]) vy[i + cw] += spill
+        }
+        let blockedY = 0
+        const wy = vy[i]
+        if (wy > 0 && y < ch - 1 && solid[i + cw]) {
+          blockedY += wy
+          vy[i] = 0
+        } else if (wy < 0 && y > 0 && solid[i - cw]) {
+          blockedY += -wy
+          vy[i] = 0
+        }
+        if (blockedY > 0) {
+          const spill = blockedY * SPILL
+          if (x > 0 && !solid[i - 1]) vx[i - 1] -= spill
+          if (x < cw - 1 && !solid[i + 1]) vx[i + 1] += spill
+        }
       }
     }
   }

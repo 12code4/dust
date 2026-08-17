@@ -26,12 +26,15 @@ describe('sand', () => {
 
   it('sinks through water', () => {
     const w = new World(11, 30, 42)
-    // Water pool on the floor, sand dropped in the middle.
+    // Water pool on the floor, sand dropped in the middle. Freefall wobble
+    // means it may not land dead-center — but it must reach the floor.
     for (let x = 0; x < 11; x++)
       for (let y = 24; y < 30; y++) w.set(x, y, WATER)
     w.set(5, 0, SAND)
     for (let t = 0; t < 200; t++) w.step()
-    expect(w.get(5, 29)).toBe(SAND)
+    let onFloor = false
+    for (let x = 0; x < 11; x++) if (w.get(x, 29) === SAND) onFloor = true
+    expect(onFloor).toBe(true)
   })
 })
 

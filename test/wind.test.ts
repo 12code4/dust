@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { World } from '../src/sim/world.ts'
 import { Wind } from '../src/sim/wind.ts'
-import { WATER, FIRE, STEAM } from '../src/sim/elements.ts'
+import { WALL, WATER, FIRE, STEAM } from '../src/sim/elements.ts'
 
 function centroidX(w: World, el: number): number {
   let sum = 0
@@ -47,6 +47,73 @@ describe('wind field', () => {
     // A cell two over from the impulse point now feels some of it.
     const i = wind.cellIndex(68, 45)
     expect(wind.vx[i]).toBeGreaterThan(0.01)
+  })
+})
+
+describe('wind meets walls', () => {
+  it('does not blow through a wall, and deflects along it', () => {
+    const w = new World(120, 60, 3)
+    for (let y = 0; y < 60; y++) w.set(60, y, WALL) // full-height wall
+    for (let t = 0; t < 30; t++) {
+      w.wind.addImpulse(40, 30, 2.5, 0, 16) // steady rightward blow at the wall
+      w.step()
+    }
+    // Downwind of the wall: still air. (Wall occupies air-cell column 15.)
+    for (let cy = 0; cy < w.wind.ch; cy++) {
+      for (let cx = 17; cx < w.wind.cw; cx++) {
+        const i = cy * w.wind.cw + cx
+        expect(Math.abs(w.wind.vx[i])).toBeLessThan(0.05)
+        expect(Math.abs(w.wind.vy[i])).toBeLessThan(0.05)
+      }
+    }
+    // Upwind face: the into-wall component is killed…
+    const face = w.wind.cellIndex(56, 30)
+    expect(w.wind.vx[face]).toBeLessThanOrEqual(0)
+    // …but air escapes along the wall: somewhere on the face, tangential flow.
+    let tangential = 0
+    for (let cy = 0; cy < w.wind.ch; cy++) {
+      tangential = Math.max(tangential, Math.abs(w.wind.vy[cy * w.wind.cw + 14]))
+    }
+    expect(tangential).toBeGreaterThan(0.05)
+  })
+
+  it('erasing a wall lets wind through again', () => {
+    const w = new World(80, 40, 3)
+    for (let y = 0; y < 40; y++) w.set(40, y, WALL)
+    for (let y = 0; y < 40; y++) w.set(40, y, 0) // erase it
+    for (let t = 0; t < 20; t++) {
+      w.wind.addImpulse(20, 20, 2.5, 0, 12)
+      w.step()
+    }
+    const beyond = w.wind.cellIndex(56, 20)
+    expect(w.wind.vx[beyond]).toBeGreaterThan(0.05)
+  })
+})
+
+describe('water flows like a stream, not a queue of soldiers', () => {
+  it('queued water follows the flow instead of bouncing backward', () => {
+    // A 1-high channel: floor and ceiling, three waters heading right.
+    const w = new World(60, 10, 8)
+    for (let x = 0; x < 60; x++) {
+      w.set(x, 4, WALL)
+      w.set(x, 6, WALL)
+    }
+    for (const x of [5, 6, 7]) {
+      w.set(x, 5, WATER)
+      w.meta[5 * 60 + x] = 1 // heading right
+    }
+    for (let t = 0; t < 15; t++) w.step()
+    // All three should have advanced well to the right; with flip-on-block
+    // the rear ones wandered backward instead.
+    let minX = 60
+    let n = 0
+    for (let x = 0; x < 60; x++)
+      if (w.get(x, 5) === WATER) {
+        minX = Math.min(minX, x)
+        n++
+      }
+    expect(n).toBe(3)
+    expect(minX).toBeGreaterThan(9)
   })
 })
 

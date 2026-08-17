@@ -104,9 +104,11 @@ function canvasPos(e: PointerEvent): [number, number] {
 /** Stamp along the segment from the previous event so fast strokes stay solid. */
 function stroke(x0: number, y0: number, x1: number, y1: number): void {
   if (!erasing && tool.el === WIND_TOOL) {
-    // Blow along the drag: direction from the stroke, reach from the pen.
-    const clamp = (v: number) => (v > 2.5 ? 2.5 : v < -2.5 ? -2.5 : v)
-    world.wind.addImpulse(x1, y1, clamp((x1 - x0) * 0.12), clamp((y1 - y0) * 0.12), pen * 4 + 6)
+    // Blow along the drag: direction from the stroke; both strength and reach
+    // scale with the pen (PG: wind "strength depending on the pen-size").
+    const k = 0.05 + pen * 0.015
+    const clamp = (v: number) => (v > 3 ? 3 : v < -3 ? -3 : v)
+    world.wind.addImpulse(x1, y1, clamp((x1 - x0) * k), clamp((y1 - y0) * k), pen * 4 + 6)
     return
   }
   const el = erasing ? EMPTY : tool.el

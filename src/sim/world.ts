@@ -85,6 +85,10 @@ export class World {
   }
 
   private write(i: number, el: number): void {
+    const old = this.cells[i]
+    if (old === WALL !== (el === WALL)) {
+      this.wind.setSolidPixel(i % this.w, (i / this.w) | 0, el === WALL)
+    }
     this.cells[i] = el
     this.shade[i] = this.rng.next() & 3
     if (el === FIRE) this.meta[i] = 24 + this.rng.int(48)
@@ -209,6 +213,17 @@ export class World {
     const below = i + this.w
     const b = this.cells[below]
     if (b === EMPTY) {
+      // A pinch of freefall wobble: pours fan out organically instead of
+      // dropping in ruler-straight streams (subtler than water's — piles
+      // should still stack crisp).
+      if (this.rng.chance(0.12)) {
+        const d = this.rng.sign()
+        const nx = x + d
+        if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
+          this.moveTo(i, below + d)
+          return
+        }
+      }
       this.moveTo(i, below)
       return
     }
@@ -252,22 +267,30 @@ export class World {
         return
       }
     }
-    // Horizontal flow with per-particle direction memory and dispersion:
-    // slide up to 3 cells toward meta-dir, flipping direction when blocked.
-    // meta travels with the particle in moveTo, so set it before moving.
-    let dir = this.meta[i] === 0 ? -1 : 1
-    let dest = -1
-    for (let attempt = 0; attempt < 2; attempt++) {
-      for (let s = 1; s <= 3; s++) {
+    // Horizontal flow with direction memory and dispersion (up to 3 cells).
+    // Queueing beats ping-pong: blocked by fellow water ahead usually means
+    // "the stream is moving, hold your heading and wait your turn" — flipping
+    // on every block made queued particles wander backward against the flow
+    // and drain in stiff single-file. Blocked by a wall means turn around for
+    // real. Boxed in on both sides: rest with zero PRNG draws, so still pools
+    // stay bit-stable.
+    const dir = this.meta[i] === 0 ? -1 : 1
+    const ahead = x + dir >= 0 && x + dir < this.w ? this.cells[i + dir] : WALL
+    if (ahead === EMPTY) {
+      let dest = i + dir
+      for (let s = 2; s <= 3; s++) {
         const tx = x + dir * s
         if (tx < 0 || tx >= this.w || this.cells[i + dir * s] !== EMPTY) break
         dest = i + dir * s
       }
-      if (dest !== -1) break
-      dir = -dir
+      this.moveTo(i, dest)
+      return
     }
-    this.meta[i] = dir === -1 ? 0 : 1
-    if (dest !== -1) this.moveTo(i, dest)
+    const behind = x - dir >= 0 && x - dir < this.w ? this.cells[i - dir] : WALL
+    if (behind !== EMPTY) return
+    if (ahead === WATER && this.rng.chance(0.8)) return // queue behind the flow
+    this.meta[i] = dir === -1 ? 1 : 0 // turn around
+    this.moveTo(i, i - dir)
   }
 
   private updateFire(x: number, y: number, i: number): void {
