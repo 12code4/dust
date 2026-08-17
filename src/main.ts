@@ -1,6 +1,6 @@
 import { World } from './sim/world.ts'
 import { Renderer } from './render/renderer.ts'
-import { WALL, SAND, WATER, FIRE, EMPTY, SHADES } from './sim/elements.ts'
+import { WALL, SAND, WATER, FIRE, DUST, SMOKE, MUD, EMPTY, SHADES } from './sim/elements.ts'
 
 const world = new World(400, 300, 0xd05e ^ Date.now())
 const canvas = document.getElementById('view') as HTMLCanvasElement
@@ -8,15 +8,20 @@ const renderer = new Renderer(canvas, world)
 
 // ---- toolbar -------------------------------------------------------------
 
-// el: -1 marks the wind tool — it blows the air field instead of painting.
+// Negative el marks the non-painting tools.
 type Tool = { name: string; el: number; density: number }
 const WIND_TOOL = -1
+const DRAG_TOOL = -2
 const TOOLS: Tool[] = [
   { name: 'wall', el: WALL, density: 1 },
   { name: 'sand', el: SAND, density: 1 },
+  { name: 'dust', el: DUST, density: 1 },
   { name: 'water', el: WATER, density: 1 },
+  { name: 'mud', el: MUD, density: 1 },
   { name: 'fire', el: FIRE, density: 0.3 },
+  { name: 'smoke', el: SMOKE, density: 0.5 },
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
+  { name: '🖐 drag', el: DRAG_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
 ]
 const PEN_MIN = 0 // PG's pen-s range: 0–9
@@ -43,7 +48,7 @@ function swatch(el: number): string {
 }
 
 const toolButtons = TOOLS.map((t) => {
-  const b = button(`${t.el === EMPTY || t.el === WIND_TOOL ? '' : swatch(t.el)}${t.name}`, () => {
+  const b = button(`${t.el <= EMPTY ? '' : swatch(t.el)}${t.name}`, () => {
     tool = t
     toolButtons.forEach((x) => x.classList.remove('active'))
     b.classList.add('active')
@@ -120,6 +125,68 @@ const windInput = {
   curY: 0,
 }
 
+/**
+ * Drag input: grab whatever's under the pen, haul it with the cursor
+ * (collision-checked), and on release the tracked hand speed becomes real
+ * particle velocity — the throw is pure ballistics, no wind involved.
+ */
+const dragInput = {
+  active: false,
+  lastX: 0,
+  lastY: 0,
+  curX: 0,
+  curY: 0,
+  vX: 0, // cursor velocity EMA, cells/tick
+  vY: 0,
+}
+
+function pumpDrag(): void {
+  if (!dragInput.active) return
+  const clamp6 = (v: number) => (v > 6 ? 6 : v < -6 ? -6 : v)
+  const dx = clamp6(dragInput.curX - dragInput.lastX)
+  const dy = clamp6(dragInput.curY - dragInput.lastY)
+  dragInput.vX = dragInput.vX * 0.7 + dx * 0.3
+  dragInput.vY = dragInput.vY * 0.7 + dy * 0.3
+  if (dx !== 0 || dy !== 0) {
+    // Haul the disk, far side of the motion first so followers find room.
+    const r = pen + 1
+    const xs: number[] = []
+    const ys: number[] = []
+    for (let o = -r; o <= r; o++) {
+      xs.push(o)
+      ys.push(o)
+    }
+    if (dx > 0) xs.reverse()
+    if (dy > 0) ys.reverse()
+    for (const oy of ys) {
+      for (const ox of xs) {
+        if (ox * ox + oy * oy > r * r) continue
+        world.dragMove(dragInput.lastX + ox, dragInput.lastY + oy, dx, dy)
+      }
+    }
+  }
+  dragInput.lastX = dragInput.curX
+  dragInput.lastY = dragInput.curY
+}
+
+function releaseDrag(): void {
+  if (!dragInput.active) return
+  dragInput.active = false
+  // The throw: hand speed (cells/tick) → particle velocity (quarter-cells).
+  const qvx = Math.round(dragInput.vX * 5)
+  const qvy = Math.round(dragInput.vY * 5)
+  if (qvx === 0 && qvy === 0) return
+  const r = pen + 1
+  for (let oy = -r; oy <= r; oy++) {
+    for (let ox = -r; ox <= r; ox++) {
+      if (ox * ox + oy * oy > r * r) continue
+      world.setImpulse(dragInput.curX + ox, dragInput.curY + oy, qvx, qvy)
+    }
+  }
+  dragInput.vX = 0
+  dragInput.vY = 0
+}
+
 function pumpWind(): void {
   if (!windInput.active) return
   if (windInput.mode === 'suck') {
@@ -176,6 +243,16 @@ canvas.addEventListener('pointerdown', (e) => {
     windInput.curY = y
     return
   }
+  if (tool.el === DRAG_TOOL) {
+    dragInput.active = true
+    dragInput.lastX = x
+    dragInput.lastY = y
+    dragInput.curX = x
+    dragInput.curY = y
+    dragInput.vX = 0
+    dragInput.vY = 0
+    return
+  }
   drawing = true
   erasing = e.button === 2
   lastX = x
@@ -197,6 +274,11 @@ canvas.addEventListener('pointermove', (e) => {
     windInput.curY = y
     return
   }
+  if (dragInput.active) {
+    dragInput.curX = x
+    dragInput.curY = y
+    return
+  }
   if (!drawing) return
   stroke(lastX, lastY, x, y)
   lastX = x
@@ -206,11 +288,13 @@ canvas.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
   drawing = false
   windInput.active = false
+  releaseDrag() // the throw happens here
 })
 canvas.addEventListener('pointercancel', (e) => {
   if (!e.isPrimary) return
   drawing = false
   windInput.active = false
+  dragInput.active = false // cancelled, no throw
 })
 canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 canvas.addEventListener(
@@ -250,6 +334,7 @@ function frame(now: number): void {
   while (acc >= STEP_MS && steps < MAX_STEPS) {
     if (!paused || stepOnce) {
       pumpWind() // held wind/vacuum streams into every tick
+      pumpDrag() // held drag hauls its catch along
       pumpPaint() // held brushes keep emitting, PG-pen style
       world.step()
       stepOnce = false

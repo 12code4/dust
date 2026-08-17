@@ -5,7 +5,7 @@
  *   npm run bench
  */
 import { World } from '../src/sim/world.ts'
-import { SAND, WATER, FIRE, WALL, STEAM } from '../src/sim/elements.ts'
+import { SAND, WATER, FIRE, WALL, STEAM, DUST } from '../src/sim/elements.ts'
 
 const w = new World(400, 300, 0xbeef)
 
@@ -13,9 +13,12 @@ const w = new World(400, 300, 0xbeef)
 for (let x = 0; x < 260; x++) w.set(x, 120, WALL)
 for (let x = 140; x < 400; x++) w.set(x, 200, WALL)
 
-// ~50k dots: a sand mass, a deep pool, fire, and steam for the risers.
-for (let y = 0; y < 60; y++) for (let x = 20; x < 380; x++) w.set(x, y, SAND) // 21,600
+// ~50k dots incl. dust near the fire rows, so the bench pays for lofting,
+// wetting, smoke plumes, and deflagration chains — the worst realistic case.
+for (let y = 0; y < 41; y++) for (let x = 20; x < 380; x++) w.set(x, y, SAND) // 14,760
+for (let y = 43; y < 56; y++) for (let x = 20; x < 380; x++) w.set(x, y, DUST) // 4,680
 for (let y = 130; y < 190; y++) for (let x = 0; x < 380; x++) w.set(x, y, WATER) // ~22,800
+for (let y = 202; y < 209; y++) for (let x = 140; x < 380; x++) w.set(x, y, DUST) // 1,680
 for (let y = 240; y < 250; y++) for (let x = 0; x < 400; x++) w.set(x, y, FIRE) // 4,000
 for (let y = 260; y < 264; y++) for (let x = 0; x < 400; x++) w.set(x, y, STEAM) // 1,600
 

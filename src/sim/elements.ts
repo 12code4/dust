@@ -9,10 +9,23 @@ export const SAND = 2
 export const WATER = 3
 export const FIRE = 4
 export const STEAM = 5
+export const DUST = 6
+export const SMOKE = 7
+export const MUD = 8
 
-export const ELEMENT_COUNT = 6
+export const ELEMENT_COUNT = 9
 
-export const ELEMENT_NAMES = ['empty', 'wall', 'sand', 'water', 'fire', 'steam'] as const
+export const ELEMENT_NAMES = [
+  'empty',
+  'wall',
+  'sand',
+  'water',
+  'fire',
+  'steam',
+  'dust',
+  'smoke',
+  'mud',
+] as const
 
 /** Elements that count against the dot budget (walls are scenery, not dots). */
 export function isDot(el: number): boolean {
@@ -30,6 +43,9 @@ export const WINDAGE: readonly number[] = [
   0.15, // WATER
   0.7, // FIRE
   0.9, // STEAM
+  1.0, // DUST — the namesake rides every draft
+  0.85, // SMOKE
+  0.05, // MUD — sticky, nearly windproof
 ]
 
 /**
@@ -79,5 +95,26 @@ export const SHADES: ReadonlyArray<readonly [number, number, number][]> = [
     [0xaa, 0xb4, 0xc0],
     [0xc8, 0xd0, 0xd8],
     [0x9c, 0xa8, 0xb6],
+  ],
+  // DUST — soft warm greys, the color everything ends up
+  [
+    [0xb2, 0xac, 0xa2],
+    [0xa6, 0xa0, 0x96],
+    [0xbc, 0xb6, 0xac],
+    [0x9a, 0x94, 0x8a],
+  ],
+  // SMOKE — sooty blue-greys
+  [
+    [0x4a, 0x4d, 0x55],
+    [0x41, 0x44, 0x4c],
+    [0x54, 0x57, 0x60],
+    [0x38, 0x3b, 0x43],
+  ],
+  // MUD — rich wet browns
+  [
+    [0x7a, 0x55, 0x36],
+    [0x70, 0x4d, 0x30],
+    [0x84, 0x5d, 0x3c],
+    [0x66, 0x45, 0x2a],
   ],
 ]

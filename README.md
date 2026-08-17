@@ -17,9 +17,15 @@ part — rediscoverable by the player as an in-game codex.
 
 ## Status
 
-🏗️ **M0 shipped, wind is live** — the falling-sand core is real: sand, water, wall, fire
-(+steam), deterministic fixed-timestep sim, 50,000-dot budget, 60 fps at ~2.8 ms/tick
-average (p95 3.7 ms) with the full budget live (target ≤ 8 ms). The air field (M2's soul)
+🏗️ **The Namesake shipped (M2 complete)** — nine elements now: wall, sand, **dust**,
+water, **mud**, fire, **smoke**, steam. Dust is the star: it rides every draft, settles
+into caked drifts, wets into mud, and when it hangs thick near flame it **deflagrates** —
+a rolling flash that slams the pressure field and lofts more dust into the burn (settled
+dust only smolders; suspension time is tracked per grain). Fire exhales smoke; a little
+smoke always settles back as soot-dust — *everything returns to dust*. The 🖐 **drag
+tool** grabs matter and throws it with real ballistic velocity: collision-checked flight,
+friction, gravity arcs. Deterministic fixed-timestep sim, 50,000-dot budget, 60 fps at
+~3.1 ms/tick average with the full budget in chaos (target ≤ 8 ms). The air field
 landed early: a 4×4-px-cell velocity grid that fire feeds with convection, everything
 rides by windage, the 💨 wind tool blows (strength and reach scale with the pen, PG-style),
 and the 🌀 flow filter reveals (velocity vectors + red/blue pressure tint). The air is now

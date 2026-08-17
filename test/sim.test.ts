@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { World } from '../src/sim/world.ts'
-import { EMPTY, WALL, SAND, WATER, FIRE, STEAM } from '../src/sim/elements.ts'
+import {
+  EMPTY,
+  WALL,
+  SAND,
+  WATER,
+  FIRE,
+  STEAM,
+  DUST,
+  SMOKE,
+  MUD,
+} from '../src/sim/elements.ts'
 
 describe('sand', () => {
   it('falls straight down through empty space', () => {
@@ -32,8 +42,13 @@ describe('sand', () => {
       for (let y = 24; y < 30; y++) w.set(x, y, WATER)
     w.set(5, 0, SAND)
     for (let t = 0; t < 200; t++) w.step()
+    // Under water long enough, the grain may have wetted into mud — either
+    // way it must have reached the floor through the pool.
     let onFloor = false
-    for (let x = 0; x < 11; x++) if (w.get(x, 29) === SAND) onFloor = true
+    for (let x = 0; x < 11; x++) {
+      const el = w.get(x, 29)
+      if (el === SAND || el === MUD) onFloor = true
+    }
     expect(onFloor).toBe(true)
   })
 })
@@ -68,7 +83,8 @@ describe('fire and steam', () => {
     expect(w.countOf(FIRE)).toBeGreaterThan(0)
     for (let t = 0; t < 200; t++) w.step()
     expect(w.countOf(FIRE)).toBe(0)
-    expect(w.count).toBe(w.countOf(STEAM)) // whatever remains is steam only
+    // What remains is exhaust: steam, smoke, and settled soot-dust.
+    expect(w.count).toBe(w.countOf(STEAM) + w.countOf(SMOKE) + w.countOf(DUST))
   })
 
   it('is quenched by water into steam', () => {
@@ -176,7 +192,13 @@ describe('world invariants', () => {
     for (let x = 30; x < 50; x++) w.set(x, 50, WALL)
     for (let t = 0; t < 500; t++) w.step()
     const live =
-      w.countOf(SAND) + w.countOf(WATER) + w.countOf(FIRE) + w.countOf(STEAM)
+      w.countOf(SAND) +
+      w.countOf(WATER) +
+      w.countOf(FIRE) +
+      w.countOf(STEAM) +
+      w.countOf(DUST) +
+      w.countOf(SMOKE) +
+      w.countOf(MUD)
     expect(w.count).toBe(live)
   })
 })

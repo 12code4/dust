@@ -43,17 +43,24 @@ try {
   await light()
   await page.waitForTimeout(500)
   await light()
-  // Drop a water blob so the shot catches a stream mid-wobble, turn on the
-  // flow filter, and run a vacuum over the sand dune so the shot shows
-  // pressure suction (blue tint, inward vectors, lofted grains).
+  // Dress the scene: water mid-fall, dust drifts settling on the dune, flow
+  // filter on, a vacuum working the dune — and a dust cloud dropped over the
+  // bonfires, timed so the deflagration flash lands in the frame.
   await page.evaluate(() => {
+    const DUST = 6
     window.dust.world.paintDisk(320, 25, 9, 3)
+    for (let i = 0; i < 6; i++) window.dust.world.paintDisk(120 + i * 14, 150, 5, DUST)
     window.dust.renderer.flow = true
-    const suck = () => window.dust.world.wind.addPressure(130, 145, -1.6, 24)
+    const suck = () => window.dust.world.wind.addPressure(330, 200, -1.4, 20)
     const h = setInterval(suck, 16)
-    setTimeout(() => clearInterval(h), 1400)
+    setTimeout(() => clearInterval(h), 1200)
   })
-  await page.waitForTimeout(1500)
+  await page.waitForTimeout(1200)
+  await page.evaluate(() => {
+    const DUST = 6
+    window.dust.world.paintDisk(110, 255, 11, DUST, 0.8) // the silo moment
+  })
+  await page.waitForTimeout(400)
 
   const stats = await page.evaluate(() => window.dust.stats())
   console.log(
