@@ -625,14 +625,15 @@ export class World {
       if (this.meta[i] >= 3 && this.suspendedDustNeighbors(x, y, i) >= 2) {
         // FLASH — the grain-silo moment. The pressure spike is the chain:
         // it lofts nearby dust into the fire that's about to reach it.
+        // Tuned for a rolling whoomph, not artillery: soft pop, wide burn.
         cells[i] = FIRE
         this.meta[i] = 10 + this.rng.int(10)
         this.updated[i] = 1
-        this.wind.addPressure(x, y, 2.2, 10)
+        this.wind.addPressure(x, y, 1.4, 8)
         return
       }
-      if (this.rng.chance(0.06)) {
-        cells[i] = FIRE // settled dust only smolders
+      if (this.rng.chance(0.25)) {
+        cells[i] = FIRE // settled dust burns quick — a racing ground fire
         this.meta[i] = 12 + this.rng.int(12)
         this.updated[i] = 1
         return
