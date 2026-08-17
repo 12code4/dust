@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
+    "standalone": "npm run build && cp dist/index.html dust.html",
     "test": "vitest run",
     "bench": "node --experimental-strip-types bench/bench.ts",
     "smoke": "npm run build && node --experimental-strip-types scripts/smoke.ts"
@@ -18,6 +19,7 @@
     "playwright": "^1.52.0",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^3.1.4"
   }
 }

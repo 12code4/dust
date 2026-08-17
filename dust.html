@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dust — M0</title>
+    <style>
+      :root {
+        --bg: #0c0d10;
+        --panel: #16181d;
+        --edge: #26292f;
+        --text: #c8ccd4;
+        --dim: #7c808a;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.4 ui-monospace, 'Cascadia Mono', Menlo, monospace;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 16px;
+        min-height: 100vh;
+      }
+      h1 { font-size: 15px; letter-spacing: 0.14em; font-weight: 600; }
+      h1 .sub { color: #7c808a; font-weight: 400; letter-spacing: 0; }
+      #toolbar, #controls {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+      }
+      button {
+        background: var(--panel);
+        color: var(--text);
+        border: 1px solid var(--edge);
+        border-radius: 5px;
+        padding: 5px 11px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover { border-color: #3a3e46; }
+      button.active { border-color: #d8b45a; color: #d8b45a; }
+      button .swatch {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+      canvas {
+        /* content-box keeps the 1px border outside the 800px content area, so
+           the 400-cell grid displays at an exact 2x integer scale */
+        box-sizing: content-box;
+        width: 800px;
+        max-width: calc(100% - 2px);
+        image-rendering: pixelated;
+        border: 1px solid var(--edge);
+        border-radius: 4px;
+        cursor: crosshair;
+        touch-action: none;
+      }
+      #hud { color: #7c808a; display: flex; gap: 18px; }
+      #hud b { color: var(--text); font-weight: 600; }
+      .sep { width: 1px; align-self: stretch; background: var(--edge); }
+    </style>
+    <script type="module" crossorigin>var K=Object.defineProperty;var z=(r,t,s)=>t in r?K(r,t,{enumerable:!0,configurable:!0,writable:!0,value:s}):r[t]=s;var h=(r,t,s)=>z(r,typeof t!="symbol"?t+"":t,s);(function(){const t=document.createElement("link").relList;if(t&&t.supports&&t.supports("modulepreload"))return;for(const i of document.querySelectorAll('link[rel="modulepreload"]'))e(i);new MutationObserver(i=>{for(const n of i)if(n.type==="childList")for(const c of n.addedNodes)c.tagName==="LINK"&&c.rel==="modulepreload"&&e(c)}).observe(document,{childList:!0,subtree:!0});function s(i){const n={};return i.integrity&&(n.integrity=i.integrity),i.referrerPolicy&&(n.referrerPolicy=i.referrerPolicy),i.crossOrigin==="use-credentials"?n.credentials="include":i.crossOrigin==="anonymous"?n.credentials="omit":n.credentials="same-origin",n}function e(i){if(i.ep)return;i.ep=!0;const n=s(i);fetch(i.href,n)}})();class N{constructor(t){h(this,"s");this.s=t|0||2654435769}next(){let t=this.s;return t^=t<<13,t^=t>>>17,t^=t<<5,this.s=t|0,t>>>0}int(t){return this.next()%t}chance(t){return this.next()<t*4294967296}sign(){return(this.next()&1)===0?-1:1}}const l=0,v=1,U=2,m=3,S=4,P=5,k=6;function G(r){return r>=U}const $=[[[20,22,26],[20,22,26],[20,22,26],[20,22,26]],[[98,100,106],[106,108,114],[114,116,122],[90,92,98]],[[216,180,90],[207,169,78],[226,192,108],[198,158,68]],[[59,111,214],[53,102,200],[68,122,226],[47,94,190]],[[179,36,12],[226,92,16],[255,158,28],[255,224,102]],[[185,194,204],[170,180,192],[200,208,216],[156,168,182]]];class J{constructor(t=400,s=300,e=1,i=5e4){h(this,"w");h(this,"h");h(this,"budget");h(this,"cells");h(this,"meta");h(this,"shade");h(this,"updated");h(this,"rng");h(this,"frame",0);h(this,"count",0);this.w=t,this.h=s,this.budget=i,this.cells=new Uint8Array(t*s),this.meta=new Uint8Array(t*s),this.shade=new Uint8Array(t*s),this.updated=new Uint8Array(t*s),this.rng=new N(e)}reset(t){this.cells.fill(0),this.meta.fill(0),this.shade.fill(0),this.updated.fill(0),this.rng=new N(t),this.frame=0,this.count=0}inBounds(t,s){return t>=0&&t<this.w&&s>=0&&s<this.h}get(t,s){return this.inBounds(t,s)?this.cells[s*this.w+t]:v}set(t,s,e){if(!this.inBounds(t,s))return!1;const i=s*this.w+t,n=this.cells[i];return e===n?!1:e===l||e===v?(G(n)&&this.count--,this.write(i,e),!0):n!==l||this.count>=this.budget?!1:(this.write(i,e),this.count++,!0)}write(t,s){this.cells[t]=s,this.shade[t]=this.rng.next()&3,s===S?this.meta[t]=24+this.rng.int(48):s===P?this.meta[t]=100+this.rng.int(140):s===m?this.meta[t]=this.rng.next()&1:this.meta[t]=0}paintDisk(t,s,e,i,n=1){const c=e*e;for(let o=-e;o<=e;o++)for(let a=-e;a<=e;a++)a*a+o*o>c||n<1&&!this.rng.chance(n)||this.set(t+a,s+o,i)}step(){this.updated.fill(0),this.frame++;const{w:t,h:s,cells:e,updated:i}=this;for(let n=s-1;n>=0;n--){const c=n*t,o=(n+this.frame&1)===0,a=o?0:t-1,d=o?1:-1;for(let F=0,p=a;F<t;F++,p+=d){const g=c+p,A=e[g];if(!(A===l||A===v||i[g]))switch(A){case U:this.updateSand(p,n,g);break;case m:this.updateWater(p,n,g);break;case S:this.updateFire(p,n,g);break;case P:this.updateSteam(p,n,g);break}}}}moveTo(t,s){const{cells:e,meta:i,shade:n,updated:c}=this;e[s]=e[t],i[s]=i[t],n[s]=n[t],e[t]=l,i[t]=0,n[t]=0,c[t]=1,c[s]=1}swap(t,s){const{cells:e,meta:i,shade:n,updated:c}=this,o=e[t],a=i[t],d=n[t];e[t]=e[s],i[t]=i[s],n[t]=n[s],e[s]=o,i[s]=a,n[s]=d,c[t]=1,c[s]=1}updateSand(t,s,e){if(s+1>=this.h)return;const i=e+this.w,n=this.cells[i];if(n===l){this.moveTo(e,i);return}if(n===m&&this.rng.chance(.6)){this.swap(e,i);return}const c=t>0&&this.cells[i-1]===l,o=t+1<this.w&&this.cells[i+1]===l;if(!c&&!o)return;const a=c&&o?this.rng.sign():c?-1:1;this.moveTo(e,i+a)}updateWater(t,s,e){const i=e+this.w;if(s+1<this.h&&this.cells[i]===l){this.moveTo(e,i);return}if(s+1<this.h){const o=t>0&&this.cells[i-1]===l,a=t+1<this.w&&this.cells[i+1]===l;if(o||a){const d=o&&a?this.rng.sign():o?-1:1;this.moveTo(e,i+d);return}}let n=this.meta[e]===0?-1:1,c=-1;for(let o=0;o<2;o++){for(let a=1;a<=3;a++){const d=t+n*a;if(d<0||d>=this.w||this.cells[e+n*a]!==l)break;c=e+n*a}if(c!==-1)break;n=-n}this.meta[e]=n===-1?0:1,c!==-1&&this.moveTo(e,c)}updateFire(t,s,e){const{w:i,cells:n}=this;if(s+1<this.h&&n[e+i]===m||s>0&&n[e-i]===m||t>0&&n[e-1]===m||t+1<i&&n[e+1]===m){n[e]=P,this.meta[e]=60+this.rng.int(60),this.updated[e]=1;return}const c=this.meta[e];if(c<=1){n[e]=l,this.meta[e]=0,this.shade[e]=0,this.count--;return}if(this.meta[e]=c-1,this.rng.chance(.8)&&s>0){const o=this.rng.int(3)-1,a=t+o;if(a>=0&&a<i&&n[e-i+o]===l){this.moveTo(e,e-i+o);return}}if(this.rng.chance(.3)){const o=this.rng.sign(),a=t+o;a>=0&&a<i&&n[e+o]===l&&this.moveTo(e,e+o)}}updateSteam(t,s,e){const i=this.meta[e];if(i<=1){this.cells[e]=l,this.meta[e]=0,this.shade[e]=0,this.count--;return}this.meta[e]=i-1;const{w:n,cells:c}=this;if(this.rng.chance(.7)&&s>0){const o=this.rng.int(3)-1,a=t+o;if(a>=0&&a<n&&c[e-n+o]===l){this.moveTo(e,e-n+o);return}}if(this.rng.chance(.4)){const o=this.rng.sign(),a=t+o;a>=0&&a<n&&c[e+o]===l&&this.moveTo(e,e+o)}}countOf(t){let s=0;for(let e=0;e<this.cells.length;e++)this.cells[e]===t&&s++;return s}hash(){let t=2166136261;const{cells:s,meta:e,shade:i}=this;for(let n=0;n<s.length;n++)t^=s[n],t=Math.imul(t,16777619),t^=e[n],t=Math.imul(t,16777619),t^=i[n],t=Math.imul(t,16777619);return t>>>0}}class Q{constructor(t,s){h(this,"ctx");h(this,"image");h(this,"pixels");h(this,"palette");h(this,"world");this.world=s,t.width=s.w,t.height=s.h;const e=t.getContext("2d");if(!e)throw new Error("no 2d context");this.ctx=e,this.image=e.createImageData(s.w,s.h),this.pixels=new Uint32Array(this.image.data.buffer);const i=new Uint8Array(new Uint32Array([1]).buffer)[0]===1;this.palette=new Uint32Array(k*4);for(let n=0;n<k;n++)for(let c=0;c<4;c++){const[o,a,d]=$[n][c];this.palette[n*4+c]=i?255<<24|d<<16|a<<8|o:o<<24|a<<16|d<<8|255}}draw(){const{cells:t,meta:s,shade:e}=this.world,{pixels:i,palette:n}=this;for(let c=0;c<t.length;c++){const o=t[c],a=o===S?Math.min(3,s[c]>>4):e[c];i[c]=n[o*4+a]}this.ctx.putImageData(this.image,0,0)}}const f=new J(400,300,53342^Date.now()),u=document.getElementById("view"),V=new Q(u,f),_=[{name:"wall",el:v,density:1},{name:"sand",el:U,density:1},{name:"water",el:m,density:1},{name:"fire",el:S,density:.3},{name:"erase",el:l,density:1}],j=[1,2,4,8,16];let B=_[1],q=4,x=!1,D=!1;const tt=document.getElementById("toolbar"),O=document.getElementById("controls");function E(r,t){const s=document.createElement("button");return s.innerHTML=r,s.addEventListener("click",()=>t(s)),s}function et(r){const[t,s,e]=$[r][0];return`<span class="swatch" style="background:rgb(${t},${s},${e})"></span>`}const H=_.map(r=>{const t=E(`${r.el===l?"":et(r.el)}${r.name}`,()=>{B=r,H.forEach(s=>s.classList.remove("active")),t.classList.add("active")});return tt.appendChild(t),t});H[1].classList.add("active");O.append(...j.map((r,t)=>{const s=E(`●${r}`,e=>{q=r,O.querySelectorAll("button.pen").forEach(i=>i.classList.remove("active")),e.classList.add("active")});return s.classList.add("pen"),r===4&&s.classList.add("active"),s}));const R=document.createElement("div");R.className="sep";O.append(R,E("⏸ pause",r=>{x=!x,r.textContent=x?"▶ play":"⏸ pause"}),E("⏭ step",()=>{D=!0}),E("🗑 clear",()=>f.reset(53342^Date.now())));let T=!1,C=!1,b=0,y=0;function X(r){const t=u.getBoundingClientRect(),s=r.clientX-t.left-u.clientLeft,e=r.clientY-t.top-u.clientTop;return[Math.floor(s/u.clientWidth*f.w),Math.floor(e/u.clientHeight*f.h)]}function Y(r,t,s,e){const i=C?l:B.el,n=C?1:B.density,c=Math.max(Math.abs(s-r),Math.abs(e-t),1);for(let o=0;o<=c;o++){const a=Math.round(r+(s-r)*o/c),d=Math.round(t+(e-t)*o/c);f.paintDisk(a,d,q,i,n)}}u.addEventListener("pointerdown",r=>{r.isPrimary&&(r.preventDefault(),u.setPointerCapture(r.pointerId),T=!0,C=r.button===2,[b,y]=X(r),Y(b,y,b,y))});u.addEventListener("pointermove",r=>{if(!T||!r.isPrimary)return;const[t,s]=X(r);Y(b,y,t,s),b=t,y=s});u.addEventListener("pointerup",r=>{r.isPrimary&&(T=!1)});u.addEventListener("pointercancel",r=>{r.isPrimary&&(T=!1)});u.addEventListener("contextmenu",r=>r.preventDefault());const st=60,I=1e3/st,nt=4,it=document.getElementById("dots"),rt=document.getElementById("fps"),ot=document.getElementById("simms");document.getElementById("budget").textContent=String(f.budget);let w=0,W=performance.now(),L=60,M=0;function Z(r){const t=Math.min(r-W,250);W=r,L+=(1e3/Math.max(t,.01)-L)*.05,w+=t;let s=0,e=0;const i=performance.now();for(;w>=I&&s<nt;)(!x||D)&&(f.step(),D=!1,e++),w-=I,s++;w>=I&&(w=0),e>0&&(M+=((performance.now()-i)/e-M)*.1),V.draw(),it.textContent=String(f.count),rt.textContent=L.toFixed(0),ot.textContent=M.toFixed(2),requestAnimationFrame(Z)}requestAnimationFrame(Z);window.dust={world:f,stats:()=>({dots:f.count,fps:L,simMs:M})};</script>
+  </head>
+  <body>
+    <h1>DUST <span class="sub">— M0 · everything returns to dust</span></h1>
+    <div id="toolbar"></div>
+    <canvas id="view"></canvas>
+    <div id="controls"></div>
+    <div id="hud">
+      <span>dots <b id="dots">0</b>/<span id="budget"></span></span>
+      <span>fps <b id="fps">–</b></span>
+      <span>sim <b id="simms">–</b> ms</span>
+    </div>
+  </body>
+</html>

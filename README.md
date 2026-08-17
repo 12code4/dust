@@ -22,12 +22,17 @@ deterministic fixed-timestep sim, 50,000-dot budget, 60 fps at ~2.2 ms/tick aver
 (p95 2.6 ms) with the full budget live (target ≤ 8 ms). Next up: M1, the data-driven
 chemistry engine (docs/05).
 
+**Just want to play?** Grab [`dust.html`](dust.html) — the whole game in one
+self-contained file. Save it anywhere and double-click; no server, no install.
+(It's the committed output of `npm run standalone`, regenerated on release.)
+
 ```bash
 npm install
-npm run dev     # play it (Vite dev server)
-npm test        # sim behavior + determinism/golden-frame suite
-npm run bench   # 50k-dot perf bench vs the 8 ms budget
-npm run smoke   # headless browser run + screenshot via Playwright
+npm run dev         # play it (Vite dev server)
+npm test            # sim behavior + determinism/golden-frame suite
+npm run bench       # 50k-dot perf bench vs the 8 ms budget
+npm run smoke       # headless browser run + screenshot via Playwright
+npm run standalone  # rebuild the single-file dust.html
 ```
 
 Draw with the left mouse button, erase with the right. `⏸/⏭` pause and single-step.
