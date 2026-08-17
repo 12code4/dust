@@ -8,12 +8,15 @@ const renderer = new Renderer(canvas, world)
 
 // ---- toolbar -------------------------------------------------------------
 
+// el: -1 marks the wind tool — it blows the air field instead of painting.
 type Tool = { name: string; el: number; density: number }
+const WIND_TOOL = -1
 const TOOLS: Tool[] = [
   { name: 'wall', el: WALL, density: 1 },
   { name: 'sand', el: SAND, density: 1 },
   { name: 'water', el: WATER, density: 1 },
   { name: 'fire', el: FIRE, density: 0.3 },
+  { name: '💨 wind', el: WIND_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
 ]
 const PEN_SIZES = [1, 2, 4, 8, 16]
@@ -39,7 +42,7 @@ function swatch(el: number): string {
 }
 
 const toolButtons = TOOLS.map((t) => {
-  const b = button(`${t.el === EMPTY ? '' : swatch(t.el)}${t.name}`, () => {
+  const b = button(`${t.el === EMPTY || t.el === WIND_TOOL ? '' : swatch(t.el)}${t.name}`, () => {
     tool = t
     toolButtons.forEach((x) => x.classList.remove('active'))
     b.classList.add('active')
@@ -73,6 +76,10 @@ controls.append(
     stepOnce = true
   }),
   button('🗑 clear', () => world.reset(0xd05e ^ Date.now())),
+  button('🌀 flow', (b) => {
+    renderer.flow = !renderer.flow
+    b.classList.toggle('active', renderer.flow)
+  }),
 )
 
 // ---- pointer drawing -----------------------------------------------------
@@ -96,6 +103,12 @@ function canvasPos(e: PointerEvent): [number, number] {
 
 /** Stamp along the segment from the previous event so fast strokes stay solid. */
 function stroke(x0: number, y0: number, x1: number, y1: number): void {
+  if (!erasing && tool.el === WIND_TOOL) {
+    // Blow along the drag: direction from the stroke, reach from the pen.
+    const clamp = (v: number) => (v > 2.5 ? 2.5 : v < -2.5 ? -2.5 : v)
+    world.wind.addImpulse(x1, y1, clamp((x1 - x0) * 0.12), clamp((y1 - y0) * 0.12), pen * 4 + 6)
+    return
+  }
   const el = erasing ? EMPTY : tool.el
   const density = erasing ? 1 : tool.density
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1)
@@ -180,10 +193,15 @@ requestAnimationFrame(frame)
 // Exposed for the smoke test and console tinkering.
 declare global {
   interface Window {
-    dust: { world: World; stats: () => { dots: number; fps: number; simMs: number } }
+    dust: {
+      world: World
+      renderer: Renderer
+      stats: () => { dots: number; fps: number; simMs: number }
+    }
   }
 }
 window.dust = {
   world,
+  renderer,
   stats: () => ({ dots: world.count, fps: fpsEma, simMs: simEma }),
 }

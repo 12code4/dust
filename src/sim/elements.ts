@@ -20,6 +20,19 @@ export function isDot(el: number): boolean {
 }
 
 /**
+ * How strongly the air field drags each element (docs/03). Gases ride every
+ * draft, liquids resist, statics never move. Indexed by element id.
+ */
+export const WINDAGE: readonly number[] = [
+  0, // EMPTY
+  0, // WALL
+  0.3, // SAND
+  0.15, // WATER
+  0.7, // FIRE
+  0.9, // STEAM
+]
+
+/**
  * Base colors, 4 shade variants per element. A particle picks a shade at spawn
  * and keeps it for life (the PG look: grainy, stable speckle). Fire ignores its
  * spawn shade and renders by remaining lifetime instead (hot → cool).

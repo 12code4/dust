@@ -43,6 +43,12 @@ try {
   await light()
   await page.waitForTimeout(500)
   await light()
+  // Drop a water blob so the shot catches a stream mid-wobble, and turn on the
+  // flow filter so the bonfires' updraft is visible in the frame.
+  await page.evaluate(() => {
+    window.dust.world.paintDisk(320, 25, 9, 3)
+    window.dust.renderer.flow = true
+  })
   await page.waitForTimeout(250)
 
   const stats = await page.evaluate(() => window.dust.stats())

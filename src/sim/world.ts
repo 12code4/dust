@@ -1,5 +1,6 @@
 import { Prng } from './prng.ts'
-import { EMPTY, WALL, SAND, WATER, FIRE, STEAM, isDot } from './elements.ts'
+import { Wind } from './wind.ts'
+import { EMPTY, WALL, SAND, WATER, FIRE, STEAM, isDot, WINDAGE } from './elements.ts'
 
 /**
  * The simulation grid. Structure-of-arrays, no per-particle allocation:
@@ -23,6 +24,7 @@ export class World {
   readonly cells: Uint8Array
   readonly meta: Uint8Array
   readonly shade: Uint8Array
+  readonly wind: Wind
   private readonly updated: Uint8Array
   private rng: Prng
   frame = 0
@@ -36,6 +38,7 @@ export class World {
     this.meta = new Uint8Array(w * h)
     this.shade = new Uint8Array(w * h)
     this.updated = new Uint8Array(w * h)
+    this.wind = new Wind(w, h)
     this.rng = new Prng(seed)
   }
 
@@ -44,6 +47,7 @@ export class World {
     this.meta.fill(0)
     this.shade.fill(0)
     this.updated.fill(0)
+    this.wind.clear()
     this.rng = new Prng(seed)
     this.frame = 0
     this.count = 0
@@ -103,6 +107,7 @@ export class World {
 
   /** Advance one tick. */
   step(): void {
+    this.wind.step()
     this.updated.fill(0)
     this.frame++
     const { w, h, cells, updated } = this
@@ -166,7 +171,40 @@ export class World {
 
   // ---- element behaviors -------------------------------------------------
 
+  /**
+   * Let the air field shove this particle one cell, chance ∝ wind speed ×
+   * windage. The calm-threshold early-out costs zero PRNG draws, so settled
+   * scenes under still air pay only two float reads per particle.
+   */
+  private windPush(x: number, y: number, i: number, windage: number): boolean {
+    const wi = this.wind.cellIndex(x, y)
+    const wx = this.wind.vx[wi]
+    const wy = this.wind.vy[wi]
+    const ax = wx < 0 ? -wx : wx
+    const ay = wy < 0 ? -wy : wy
+    const m = (ax + ay) * windage
+    if (m < 0.05) return false
+    if (!this.rng.chance(m > 0.9 ? 0.9 : m)) return false
+    if (this.rng.chance(ax / (ax + ay))) {
+      const d = wx > 0 ? 1 : -1
+      const nx = x + d
+      if (nx >= 0 && nx < this.w && this.cells[i + d] === EMPTY) {
+        this.moveTo(i, i + d)
+        return true
+      }
+    } else {
+      const d = wy > 0 ? 1 : -1
+      const ny = y + d
+      if (ny >= 0 && ny < this.h && this.cells[i + d * this.w] === EMPTY) {
+        this.moveTo(i, i + d * this.w)
+        return true
+      }
+    }
+    return false
+  }
+
   private updateSand(x: number, y: number, i: number): void {
+    if (this.windPush(x, y, i, WINDAGE[SAND])) return
     if (y + 1 >= this.h) return
     const below = i + this.w
     const b = this.cells[below]
@@ -188,8 +226,20 @@ export class World {
   }
 
   private updateWater(x: number, y: number, i: number): void {
+    if (this.windPush(x, y, i, WINDAGE[WATER])) return
     const below = i + this.w
     if (y + 1 < this.h && this.cells[below] === EMPTY) {
+      // Freefall wobble (the PG look): streams shimmy and break apart instead
+      // of dropping as rigid columns — an echo of PG's per-dot momentum in
+      // never-quite-still air.
+      if (this.rng.chance(0.3)) {
+        const d = this.rng.sign()
+        const nx = x + d
+        if (nx >= 0 && nx < this.w && this.cells[below + d] === EMPTY) {
+          this.moveTo(i, below + d)
+          return
+        }
+      }
       this.moveTo(i, below)
       return
     }
@@ -221,6 +271,16 @@ export class World {
   }
 
   private updateFire(x: number, y: number, i: number): void {
+    // Fire breathes into the air field (PG's decompiled numbers, scaled to our
+    // grid): random sideways flutter, steady updraft. This is why smoke curls,
+    // steam sways, and a big blaze makes its own weather.
+    this.wind.perturb(
+      x,
+      y,
+      (this.rng.int(41) - 20) * 0.002,
+      -(10 + this.rng.int(41)) * 0.002,
+    )
+    if (this.windPush(x, y, i, WINDAGE[FIRE])) return
     // Quench: touching water turns the flame into a puff of steam.
     const { w, cells } = this
     if (
@@ -260,6 +320,7 @@ export class World {
   }
 
   private updateSteam(x: number, y: number, i: number): void {
+    if (this.windPush(x, y, i, WINDAGE[STEAM])) return
     const life = this.meta[i]
     if (life <= 1) {
       this.cells[i] = EMPTY

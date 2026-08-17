@@ -8,6 +8,8 @@ import type { World } from '../sim/world.ts'
  * (in practice always little-endian, but checking costs one line at startup).
  */
 export class Renderer {
+  /** The flow filter: reveal the (otherwise invisible) air field as vectors. */
+  flow = false
   private readonly ctx: CanvasRenderingContext2D
   private readonly image: ImageData
   private readonly pixels: Uint32Array
@@ -46,5 +48,29 @@ export class Renderer {
       pixels[i] = palette[el * 4 + s]
     }
     this.ctx.putImageData(this.image, 0, 0)
+    if (this.flow) this.drawFlow()
+  }
+
+  /** BG-line's heir: one short vector per air cell that's actually moving. */
+  private drawFlow(): void {
+    const { wind } = this.world
+    const ctx = this.ctx
+    const cell = 4
+    ctx.strokeStyle = 'rgba(110, 210, 255, 0.55)'
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    for (let cy = 0; cy < wind.ch; cy++) {
+      for (let cx = 0; cx < wind.cw; cx++) {
+        const i = cy * wind.cw + cx
+        const vx = wind.vx[i]
+        const vy = wind.vy[i]
+        if (vx * vx + vy * vy < 0.0025) continue
+        const px = cx * cell + cell / 2
+        const py = cy * cell + cell / 2
+        ctx.moveTo(px, py)
+        ctx.lineTo(px + vx * 8, py + vy * 8)
+      }
+    }
+    ctx.stroke()
   }
 }
