@@ -18,6 +18,8 @@ import {
   SEED,
   VINE,
   ICE,
+  GUNPOWDER,
+  OIL,
 } from '../src/sim/elements.ts'
 
 /**
@@ -364,6 +366,80 @@ const PAIR_PROBES: Record<string, Probe> = {
     // R32's observable is the footprint: the same pour scatters into a wide
     // drift on ice (grains skate to the edges) vs a tight pyramid on stone.
     expect(pourFootprint(SAND, ICE)).toBeGreaterThan(pourFootprint(SAND, STONE) * 1.5)
+  },
+[key(GUNPOWDER, FIRE)]: () => {
+    // A pile touched by flame chains into a blast: hard pressure, fast burn.
+    const w = new World(60, 40, 31)
+    for (let x = 20; x < 40; x++) for (let y = 34; y < 40; y++) w.set(x, y, GUNPOWDER)
+    const gp0 = w.countOf(GUNPOWDER)
+    w.paintDisk(19, 38, 2, FIRE)
+    let peakP = 0
+    for (let t = 0; t < 40; t++) {
+      w.step()
+      for (let k = 0; k < w.wind.p.length; k++) if (w.wind.p[k] > peakP) peakP = w.wind.p[k]
+    }
+    expect(peakP).toBeGreaterThan(2.5) // sharper than any dust whoomph
+    expect(w.countOf(GUNPOWDER)).toBeLessThan(gp0 * 0.5) // the pile went up
+  },
+  [key(GUNPOWDER, LAVA)]: () => {
+    const w = new World(30, 30, 31)
+    for (let x = 0; x < 30; x++) w.set(x, 29, LAVA)
+    w.paintDisk(15, 10, 3, GUNPOWDER)
+    const gp0 = w.countOf(GUNPOWDER)
+    for (let t = 0; t < 80; t++) w.step()
+    expect(w.countOf(GUNPOWDER)).toBeLessThan(gp0)
+  },
+  [key(GUNPOWDER, WATER)]: () => {
+    const w = new World(20, 30, 31)
+    for (let x = 0; x < 20; x++) for (let y = 24; y < 30; y++) w.set(x, y, WATER)
+    w.paintDisk(10, 5, 3, GUNPOWDER)
+    for (let t = 0; t < 300; t++) w.step()
+    expect(w.countOf(GUNPOWDER)).toBe(0)
+    expect(w.countOf(DUST) + w.countOf(MUD)).toBeGreaterThan(0) // ruined (soaked dust may wet on to mud)
+  },
+  [key(GUNPOWDER, STEAM)]: () => {
+    const w = new World(20, 20, 31)
+    for (let x = 0; x < 20; x++) w.set(x, 19, GUNPOWDER)
+    let ruined = false
+    for (let t = 0; t < 200 && !ruined; t++) {
+      w.paintDisk(10, 16, 3, STEAM, 0.5)
+      w.step()
+      if (w.countOf(DUST) + w.countOf(MUD) > 0) ruined = true
+    }
+    expect(ruined).toBe(true)
+  },
+  [key(OIL, FIRE)]: () => {
+    const w = new World(30, 30, 31)
+    for (let x = 0; x < 30; x++) for (let y = 27; y < 30; y++) w.set(x, y, OIL)
+    const oil0 = w.countOf(OIL)
+    w.paintDisk(15, 25, 2, FIRE)
+    for (let t = 0; t < 200; t++) w.step()
+    expect(w.countOf(OIL)).toBeLessThan(oil0 * 0.7) // the slick burns wide
+  },
+  [key(OIL, LAVA)]: () => {
+    const w = new World(20, 30, 31)
+    for (let x = 0; x < 20; x++) w.set(x, 29, LAVA)
+    w.paintDisk(10, 10, 3, OIL)
+    const oil0 = w.countOf(OIL)
+    for (let t = 0; t < 150; t++) w.step()
+    expect(w.countOf(OIL)).toBeLessThan(oil0)
+  },
+  [key(OIL, WATER)]: () => {
+    // Oil poured under water rises: the slick always ends on top.
+    const w = new World(20, 30, 31)
+    for (let x = 0; x < 20; x++) for (let y = 22; y < 28; y++) w.set(x, y, WATER)
+    for (let x = 0; x < 20; x++) for (let y = 28; y < 30; y++) w.set(x, y, OIL)
+    for (let t = 0; t < 600; t++) w.step()
+    // Column-wise: the topmost liquid should be oil far more often than water.
+    let oilTop = 0
+    for (let x = 0; x < 20; x++) {
+      for (let y = 0; y < 30; y++) {
+        const el = w.get(x, y)
+        if (el === OIL) { oilTop++; break }
+        if (el === WATER) break
+      }
+    }
+    expect(oilTop).toBeGreaterThan(14) // of 20 columns
   },
 }
 

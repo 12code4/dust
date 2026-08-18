@@ -62,7 +62,11 @@ try {
         window.dust.world.set(96 + k * 35, y, WOOD)
       }
     window.dust.world.paintDisk(350, 208, 6, ICE)
-    for (let k = 0; k < 6; k++) window.dust.world.set(254 + k, 233, PLANT)
+    const VINE = 14, GUNPOWDER = 16, OIL = 17
+    for (let k = 0; k < 6; k++) window.dust.world.set(254 + k, 233, VINE)
+    // A powder keg on the floor (safe until flame finds it) + an oil slick.
+    window.dust.world.paintDisk(30, 292, 5, GUNPOWDER)
+    for (let k = 0; k < 30; k++) window.dust.world.set(190 + k, 296, OIL)
     window.dust.renderer.flow = true
     const suck = () => window.dust.world.wind.addPressure(330, 200, -1.4, 20)
     const h = setInterval(suck, 16)

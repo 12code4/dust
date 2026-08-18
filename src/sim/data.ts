@@ -14,6 +14,8 @@ import {
   SEED,
   VINE,
   ICE,
+  GUNPOWDER,
+  OIL,
   ELEMENT_COUNT,
   ELEMENT_NAMES,
 } from './elements.ts'
@@ -50,6 +52,8 @@ export const ELEMENT_PROPS: Readonly<Record<number, ElementProps>> = {
   [SEED]: { state: 'powder', density: 1.1 },
   [VINE]: { state: 'static', density: 1.2 },
   [ICE]: { state: 'static', density: 0.92 },
+  [GUNPOWDER]: { state: 'powder', density: 1.8 },
+  [OIL]: { state: 'liquid', density: 0.8 },
 }
 
 /**
@@ -94,6 +98,13 @@ export const INTERACTIONS: readonly Interaction[] = [
   { a: ICE, b: LAVA, effect: 'both pay: ice → water, lava → stone (R3)' },
   { a: ICE, b: STEAM, effect: 'condenses → water on the cold face' },
   { a: ICE, b: SAND, effect: 'frictionless: grains skate off (R32)' },
+  { a: GUNPOWDER, b: FIRE, effect: 'detonates: a sharp blast that chains through the pile' },
+  { a: GUNPOWDER, b: LAVA, effect: 'detonates (as fire does)' },
+  { a: GUNPOWDER, b: WATER, effect: 'soaked: ruined to dust' },
+  { a: GUNPOWDER, b: STEAM, effect: 'damp: ruined to dust' },
+  { a: OIL, b: FIRE, effect: 'ignites; a slick burns across its surface' },
+  { a: OIL, b: LAVA, effect: 'ignites (as fire does)' },
+  { a: OIL, b: WATER, effect: 'floats: water sinks past it, the slick rides on top' },
 ]
 
 /**

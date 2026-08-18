@@ -15,6 +15,8 @@ import {
   SEED,
   VINE,
   ICE,
+  GUNPOWDER,
+  OIL,
   EMPTY,
   SHADES,
 } from './sim/elements.ts'
@@ -29,6 +31,7 @@ const renderer = new Renderer(canvas, world)
 type Tool = { name: string; el: number; density: number }
 const WIND_TOOL = -1
 const DRAG_TOOL = -2
+const VAC_TOOL = -3
 const TOOLS: Tool[] = [
   { name: 'wall', el: WALL, density: 1 },
   { name: 'sand', el: SAND, density: 1 },
@@ -44,14 +47,20 @@ const TOOLS: Tool[] = [
   { name: 'seed', el: SEED, density: 0.4 },
   { name: 'vine', el: VINE, density: 1 },
   { name: 'ice', el: ICE, density: 1 },
+  { name: 'gunpowder', el: GUNPOWDER, density: 1 },
+  { name: 'oil', el: OIL, density: 1 },
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
+  { name: '🌪 vac', el: VAC_TOOL, density: 1 },
   { name: '🖐 drag', el: DRAG_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
 ]
 const PEN_MIN = 0 // PG's pen-s range: 0–9
 const PEN_MAX = 9
 
-let tool = TOOLS[1] // sand
+// Dual wield: left button paints toolL, right button paints toolR — select
+// with left/right clicks on the toolbar. Holding both mixes the two.
+let toolL = TOOLS[1] // sand
+let toolR = TOOLS[TOOLS.length - 1] // erase (right-drag erases, as ever)
 let pen = 4
 let paused = false
 let stepOnce = false
@@ -72,15 +81,23 @@ function swatch(el: number): string {
 }
 
 const toolButtons = TOOLS.map((t) => {
-  const b = button(`${t.el <= EMPTY ? '' : swatch(t.el)}${t.name}`, () => {
-    tool = t
+  const b = button(`${t.el < EMPTY ? '' : t.el === EMPTY ? '' : swatch(t.el)}${t.name}`, () => {
+    toolL = t
     toolButtons.forEach((x) => x.classList.remove('active'))
     b.classList.add('active')
+  })
+  b.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    if (t.el < EMPTY) return // special tools live on the left button only
+    toolR = t
+    toolButtons.forEach((x) => x.classList.remove('active-r'))
+    b.classList.add('active-r')
   })
   toolbar.appendChild(b)
   return b
 })
 toolButtons[1].classList.add('active')
+toolButtons[TOOLS.length - 1].classList.add('active-r')
 
 // Compact pen-size stepper: [−] ●n [+] over PG's 0–9 range (also mouse wheel).
 const penLabel = document.createElement('span')
@@ -133,8 +150,8 @@ controls.append(
 
 // ---- pointer drawing -----------------------------------------------------
 
-let drawing = false
-let erasing = false
+let drawingL = false
+let drawingR = false
 let lastX = 0
 let lastY = 0
 
@@ -278,19 +295,21 @@ function pumpWind(): void {
  * beneath the pen. Occupied cells no-op, so static stamps (wall) are free.
  */
 function pumpPaint(): void {
-  if (!drawing) return
-  world.paintDisk(lastX, lastY, pen, erasing ? EMPTY : tool.el, erasing ? 1 : tool.density)
+  const both = drawingL && toolL.el >= EMPTY && drawingR
+  if (drawingL && toolL.el >= EMPTY)
+    world.paintDisk(lastX, lastY, pen, toolL.el, toolL.density * (both ? 0.5 : 1))
+  if (drawingR)
+    world.paintDisk(lastX, lastY, pen, toolR.el, toolR.density * (both ? 0.5 : 1))
 }
 
 /** Stamp along the segment from the previous event so fast strokes stay solid. */
-function stroke(x0: number, y0: number, x1: number, y1: number): void {
-  const el = erasing ? EMPTY : tool.el
-  const density = erasing ? 1 : tool.density
+function stroke(x0: number, y0: number, x1: number, y1: number, t: Tool, mix: boolean): void {
+  const density = t.density * (mix ? 0.5 : 1)
   const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1)
   for (let s = 0; s <= steps; s++) {
     const x = Math.round(x0 + ((x1 - x0) * s) / steps)
     const y = Math.round(y0 + ((y1 - y0) * s) / steps)
-    world.paintDisk(x, y, pen, el, density)
+    world.paintDisk(x, y, pen, t.el, density)
   }
 }
 
@@ -301,9 +320,17 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault()
   canvas.setPointerCapture(e.pointerId)
   const [x, y] = canvasPos(e)
-  if (tool.el === WIND_TOOL) {
+  lastX = x
+  lastY = y
+  if (e.button === 2) {
+    // Right button always paints toolR — independently of the left hand.
+    drawingR = true
+    stroke(x, y, x, y, toolR, drawingL && toolL.el >= EMPTY)
+    return
+  }
+  if (toolL.el === WIND_TOOL || toolL.el === VAC_TOOL) {
     windInput.active = true
-    windInput.mode = e.button === 2 ? 'suck' : 'blow'
+    windInput.mode = toolL.el === VAC_TOOL ? 'suck' : 'blow'
     windInput.dirX = 0
     windInput.dirY = 0
     windInput.emaX = 0
@@ -312,15 +339,12 @@ canvas.addEventListener('pointerdown', (e) => {
     windInput.curY = y
     return
   }
-  if (tool.el === DRAG_TOOL) {
+  if (toolL.el === DRAG_TOOL) {
     beginDrag(x, y)
     return
   }
-  drawing = true
-  erasing = e.button === 2
-  lastX = x
-  lastY = y
-  stroke(lastX, lastY, lastX, lastY)
+  drawingL = true
+  stroke(x, y, x, y, toolL, drawingR)
 })
 canvas.addEventListener('pointermove', (e) => {
   if (!e.isPrimary) return
@@ -339,27 +363,31 @@ canvas.addEventListener('pointermove', (e) => {
     }
     windInput.curX = x
     windInput.curY = y
-    return
   }
   if (dragInput.active) {
     dragInput.curX = x
     dragInput.curY = y
-    return
   }
-  if (!drawing) return
-  stroke(lastX, lastY, x, y)
+  const mix = drawingL && toolL.el >= EMPTY && drawingR
+  if (drawingL && toolL.el >= EMPTY) stroke(lastX, lastY, x, y, toolL, mix)
+  if (drawingR) stroke(lastX, lastY, x, y, toolR, mix)
   lastX = x
   lastY = y
 })
 canvas.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
-  drawing = false
+  if (e.button === 2) {
+    drawingR = false
+    return
+  }
+  drawingL = false
   windInput.active = false
   releaseDrag(true) // the throw happens here
 })
 canvas.addEventListener('pointercancel', (e) => {
   if (!e.isPrimary) return
-  drawing = false
+  drawingL = false
+  drawingR = false
   windInput.active = false
   releaseDrag(false) // cancelled: set down gently, no throw
 })

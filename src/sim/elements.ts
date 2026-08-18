@@ -19,8 +19,10 @@ export const WOOD = 12
 export const SEED = 13
 export const VINE = 14
 export const ICE = 15
+export const GUNPOWDER = 16
+export const OIL = 17
 
-export const ELEMENT_COUNT = 16
+export const ELEMENT_COUNT = 18
 
 export const ELEMENT_NAMES = [
   'empty',
@@ -39,6 +41,8 @@ export const ELEMENT_NAMES = [
   'seed',
   'vine',
   'ice',
+  'gunpowder',
+  'oil',
 ] as const
 
 /** Elements that count against the dot budget (walls are scenery, not dots). */
@@ -67,6 +71,8 @@ export const WINDAGE: readonly number[] = [
   0.4, // SEED — light enough to scatter on the wind
   0, // VINE — static
   0, // ICE — static
+  0.3, // GUNPOWDER
+  0.15, // OIL
 ]
 
 /**
@@ -186,5 +192,19 @@ export const SHADES: ReadonlyArray<readonly [number, number, number][]> = [
     [0x8e, 0xba, 0xe4],
     [0xaa, 0xd6, 0xfc],
     [0x80, 0xac, 0xd8],
+  ],
+  // GUNPOWDER — charcoal grit
+  [
+    [0x4e, 0x4a, 0x46],
+    [0x46, 0x42, 0x3e],
+    [0x58, 0x54, 0x50],
+    [0x3e, 0x3a, 0x36],
+  ],
+  // OIL — dark slick browns
+  [
+    [0x4a, 0x38, 0x2c],
+    [0x42, 0x30, 0x26],
+    [0x56, 0x42, 0x34],
+    [0x38, 0x2a, 0x20],
   ],
 ]

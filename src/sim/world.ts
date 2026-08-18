@@ -17,6 +17,8 @@ import {
   SEED,
   VINE,
   ICE,
+  GUNPOWDER,
+  OIL,
   isDot,
   WINDAGE,
 } from './elements.ts'
@@ -216,6 +218,12 @@ export class World {
           case ICE:
             this.updateIce(x, y, i)
             break
+          case GUNPOWDER:
+            this.updateGunpowder(x, y, i)
+            break
+          case OIL:
+            this.updateOil(x, y, i)
+            break
         }
       }
     }
@@ -262,7 +270,12 @@ export class World {
     updated[j] = 1
   }
 
-  /** The one fire lifespan: ~1.5s assured, then 33% extinction rolls per 0.5s. */
+  /**
+   * Pen-fire lifespan: ~1.5s assured, then 33% extinction rolls per 0.5s.
+   * Reaction flames (wood licks, lava tongues, pops, blast fronts) use their
+   * own brief lives — they render pure ember-red, while this long life walks
+   * the full red/orange/yellow mix.
+   */
   private fireLife(): number {
     let life = 90
     while (life < 240 && this.rng.chance(0.67)) life += 30
@@ -593,6 +606,11 @@ export class World {
         this.swap(i, below)
         return
       }
+      // Density sort: water sinks beneath oil, so oil always ends on top.
+      if (b === OIL && this.rng.chance(0.35)) {
+        this.swap(i, below)
+        return
+      }
       const le = x > 0 && this.cells[below - 1] === EMPTY
       const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
       if (le || re) {
@@ -745,7 +763,7 @@ export class World {
     if (life <= 1) {
       // End of life: some condenses and falls as rain (R27 — weather is the
       // fire brigade, and rain settles airborne dust); the rest dissipates.
-      if (this.rng.chance(0.35)) {
+      if (this.rng.chance(0.15)) {
         this.cells[i] = WATER
         this.meta[i] = this.rng.next() & 1
         this.updated[i] = 1
@@ -958,7 +976,7 @@ export class World {
     this.wind.perturb(x, y, (this.rng.int(21) - 10) * 0.001, -(5 + this.rng.int(16)) * 0.001)
     if (this.rng.chance(0.004) && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
       this.write(i - w, FIRE)
-      this.meta[i - w] = this.fireLife()
+      this.meta[i - w] = 8 + this.rng.int(10) // brief tongue of flame
       this.count++
       this.updated[i - w] = 1
     }
@@ -1183,7 +1201,7 @@ export class World {
         : y + 1 < this.h ? i + w : -1
       if (j >= 0 && cells[j] === EMPTY) {
         this.write(j, FIRE)
-        this.meta[j] = this.fireLife()
+        this.meta[j] = 10 + this.rng.int(14) // licks off the log: brief, red
         this.count++
         this.updated[j] = 1
       }
@@ -1203,7 +1221,7 @@ export class World {
       (y + 1 < this.h && (cells[i + w] === FIRE || cells[i + w] === LAVA))
     if (hotNear && this.rng.chance(0.5)) {
       cells[i] = FIRE // pop!
-      this.meta[i] = this.fireLife()
+      this.meta[i] = 12 + this.rng.int(12)
       this.updated[i] = 1
       return
     }
@@ -1298,7 +1316,7 @@ export class World {
       const n = cells[j]
       if ((n === FIRE || n === LAVA) && this.rng.chance(0.35)) {
         cells[i] = FIRE
-        this.meta[i] = this.fireLife()
+        this.meta[i] = 14 + this.rng.int(14)
         this.updated[i] = 1
         return
       }
@@ -1384,6 +1402,147 @@ export class World {
         return
       }
     }
+  }
+
+  /**
+   * The sharp cousin of dust's whoomph. Touching fire or lava detonates it
+   * outright: the grain becomes a brief blast-front flame and slams a hard
+   * spike into the pressure field — piles chain grain-to-grain into a real
+   * explosion (hard enough to shatter glass). Moisture ruins it to dust.
+   */
+  private updateGunpowder(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    let hot = false
+    let wet = false
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j < 0) continue
+      const n = cells[j]
+      if (n === FIRE || n === LAVA) hot = true
+      else if (n === WATER || n === STEAM) wet = true
+    }
+    if (hot) {
+      cells[i] = FIRE
+      this.meta[i] = 8 + this.rng.int(8) // blast front, not a campfire
+      this.updated[i] = 1
+      this.wind.addPressure(x, y, 4, 12)
+      return
+    }
+    if (wet && this.rng.chance(0.25)) {
+      cells[i] = DUST // damp powder is just grey dirt
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
+    if (this.windPush(x, y, i, WINDAGE[GUNPOWDER])) return
+    if (y + 1 >= this.h) return
+    const below = i + w
+    const b = cells[below]
+    if (b === EMPTY) {
+      if (
+        y + 2 < this.h &&
+        cells[below + w] === EMPTY &&
+        this.rng.chance(0.12)
+      ) {
+        const dd = this.rng.sign()
+        const nx = x + dd
+        if (nx >= 0 && nx < w && cells[below + dd] === EMPTY) {
+          this.moveTo(i, below + dd)
+          return
+        }
+      }
+      this.moveTo(i, below)
+      return
+    }
+    if ((b === STEAM || b === SMOKE) && this.rng.chance(0.9)) {
+      this.swap(i, below)
+      return
+    }
+    if (b === WATER && this.rng.chance(0.5)) {
+      this.swap(i, below) // sinks — and the soak will ruin it
+      return
+    }
+    const le = x > 0 && cells[below - 1] === EMPTY
+    const re = x + 1 < w && cells[below + 1] === EMPTY
+    if (!le && !re) return
+    if (!this.rng.chance(0.5)) return
+    const dd = le && re ? this.rng.sign() : le ? -1 : 1
+    this.moveTo(i, below + dd)
+  }
+
+  /**
+   * Slow dark fuel. Floats on water (water sinks past it), pours goopily,
+   * and lights eagerly from fire or lava — a burning slick spreads flame
+   * across its whole surface.
+   */
+  private updateOil(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    const hot =
+      (x > 0 && (cells[i - 1] === FIRE || cells[i - 1] === LAVA)) ||
+      (x + 1 < w && (cells[i + 1] === FIRE || cells[i + 1] === LAVA)) ||
+      (y > 0 && (cells[i - w] === FIRE || cells[i - w] === LAVA)) ||
+      (y + 1 < this.h && (cells[i + w] === FIRE || cells[i + w] === LAVA))
+    if (hot && this.rng.chance(0.3)) {
+      cells[i] = FIRE
+      this.meta[i] = 14 + this.rng.int(14) // reaction flame: brief, red
+      this.updated[i] = 1
+      return
+    }
+    if (this.windPush(x, y, i, WINDAGE[OIL])) return
+    const below = i + w
+    if (y + 1 < this.h && cells[below] === EMPTY) {
+      if (
+        y + 2 < this.h &&
+        cells[below + w] === EMPTY &&
+        this.rng.chance(0.2)
+      ) {
+        const d = this.rng.sign()
+        const nx = x + d
+        if (nx >= 0 && nx < w && cells[below + d] === EMPTY) {
+          this.moveTo(i, below + d)
+          return
+        }
+      }
+      this.moveTo(i, below)
+      return
+    }
+    if (y + 1 < this.h) {
+      const b = cells[below]
+      if ((b === STEAM || b === SMOKE) && this.rng.chance(0.85)) {
+        this.swap(i, below)
+        return
+      }
+      const le = x > 0 && cells[below - 1] === EMPTY
+      const re = x + 1 < w && cells[below + 1] === EMPTY
+      if (le || re) {
+        const d = le && re ? this.rng.sign() : le ? -1 : 1
+        this.moveTo(i, below + d)
+        return
+      }
+      // Supported-only spreading, same rule as water (airborne clumps hold).
+      const bb = cells[below]
+      if (bb === OIL) {
+        const supported = y + 2 >= this.h || cells[below + w] !== EMPTY
+        if (!supported) return
+      }
+    }
+    const dir = this.meta[i] === 0 ? -1 : 1
+    const ahead = x + dir >= 0 && x + dir < w ? cells[i + dir] : WALL
+    if (ahead === EMPTY) {
+      let dest = i + dir
+      if (x + dir * 2 >= 0 && x + dir * 2 < w && cells[i + dir * 2] === EMPTY) dest = i + dir * 2
+      this.moveTo(i, dest)
+      return
+    }
+    const behind = x - dir >= 0 && x - dir < w ? cells[i - dir] : WALL
+    if (behind !== EMPTY) return
+    if (ahead === OIL && this.rng.chance(0.8)) return // queue with the slick
+    this.meta[i] = dir === -1 ? 1 : 0
+    this.moveTo(i, i - dir)
   }
 
   // ---- inspection (tests, HUD) ------------------------------------------
