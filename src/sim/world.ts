@@ -15,7 +15,7 @@ import {
   GLASS,
   WOOD,
   SEED,
-  PLANT,
+  VINE,
   ICE,
   isDot,
   WINDAGE,
@@ -133,9 +133,7 @@ export class World {
     if (el === FIRE) {
       // ~1.5s of assured burn, then a 33% extinction roll every half second
       // (drawn up-front as a geometric tail so meta stays a simple countdown).
-      let life = 90
-      while (life < 240 && this.rng.chance(0.67)) life += 30
-      this.meta[i] = life
+      this.meta[i] = this.fireLife()
     } else if (el === STEAM) this.meta[i] = 60 + this.rng.int(60)
     else if (el === SMOKE) this.meta[i] = 80 + this.rng.int(70)
     else if (el === WATER) this.meta[i] = this.rng.next() & 1
@@ -212,8 +210,8 @@ export class World {
           case SEED:
             this.updateSeed(x, y, i)
             break
-          case PLANT:
-            this.updatePlant(x, y, i)
+          case VINE:
+            this.updateVine(x, y, i)
             break
           case ICE:
             this.updateIce(x, y, i)
@@ -262,6 +260,13 @@ export class World {
     impY[j] = cy
     updated[i] = 1
     updated[j] = 1
+  }
+
+  /** The one fire lifespan: ~1.5s assured, then 33% extinction rolls per 0.5s. */
+  private fireLife(): number {
+    let life = 90
+    while (life < 240 && this.rng.chance(0.67)) life += 30
+    return life
   }
 
   // ---- ballistics ---------------------------------------------------------
@@ -798,14 +803,14 @@ export class World {
         // it lofts nearby dust into the fire that's about to reach it.
         // Tuned for a rolling whoomph, not artillery: soft pop, wide burn.
         cells[i] = FIRE
-        this.meta[i] = 10 + this.rng.int(10)
+        this.meta[i] = 10 + this.rng.int(10) // a flash front, not a campfire
         this.updated[i] = 1
         this.wind.addPressure(x, y, 1.4, 8)
         return
       }
       if (this.rng.chance(0.25)) {
         cells[i] = FIRE // settled dust burns quick — a racing ground fire
-        this.meta[i] = 12 + this.rng.int(12)
+        this.meta[i] = 24 + this.rng.int(24) // consumption fire: brief
         this.updated[i] = 1
         return
       }
@@ -953,7 +958,7 @@ export class World {
     this.wind.perturb(x, y, (this.rng.int(21) - 10) * 0.001, -(5 + this.rng.int(16)) * 0.001)
     if (this.rng.chance(0.004) && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
       this.write(i - w, FIRE)
-      this.meta[i - w] = 8 + this.rng.int(10) // occasional tongue of flame
+      this.meta[i - w] = this.fireLife()
       this.count++
       this.updated[i - w] = 1
     }
@@ -1017,7 +1022,7 @@ export class World {
       (x + 1 < w && cells[i + 1] === LAVA) ||
       (y > 0 && cells[i - w] === LAVA) ||
       (y + 1 < this.h && cells[i + w] === LAVA)
-    if (nearLava && this.rng.chance(0.012)) {
+    if (nearLava && this.rng.chance(0.004)) {
       cells[i] = LAVA // the mountain surrenders
       this.meta[i] = 0
       this.updated[i] = 1
@@ -1056,7 +1061,7 @@ export class World {
       (x + 1 < w && cells[i + 1] === LAVA) ||
       (y > 0 && cells[i - w] === LAVA) ||
       (y + 1 < this.h && cells[i + w] === LAVA)
-    if (nearLava && this.rng.chance(0.04)) {
+    if (nearLava && this.rng.chance(0.008)) {
       cells[i] = LAVA
       this.meta[i] = 0
       this.updated[i] = 1
@@ -1178,7 +1183,7 @@ export class World {
         : y + 1 < this.h ? i + w : -1
       if (j >= 0 && cells[j] === EMPTY) {
         this.write(j, FIRE)
-        this.meta[j] = 10 + this.rng.int(14)
+        this.meta[j] = this.fireLife()
         this.count++
         this.updated[j] = 1
       }
@@ -1187,7 +1192,7 @@ export class World {
 
   /**
    * Falls, rolls, waits for wet ground. On mud — or on sand with water at
-   * hand — it sprouts into plant. Pops into flame near fire or lava.
+   * hand — it sprouts into a sapling that grows a wood trunk. Pops into flame near fire or lava.
    */
   private updateSeed(x: number, y: number, i: number): void {
     const { w, cells } = this
@@ -1198,8 +1203,25 @@ export class World {
       (y + 1 < this.h && (cells[i + w] === FIRE || cells[i + w] === LAVA))
     if (hotNear && this.rng.chance(0.5)) {
       cells[i] = FIRE // pop!
-      this.meta[i] = 12 + this.rng.int(12)
+      this.meta[i] = this.fireLife()
       this.updated[i] = 1
+      return
+    }
+    // A sprouted seed climbs its own trunk: it converts to wood and re-seeds
+    // itself one cell up, meta counting the height left to grow — a sapling
+    // rising in real time.
+    if (this.meta[i] > 0 && y + 1 < this.h && cells[i + w] === WOOD) {
+      if (!this.rng.chance(0.12)) return
+      const h = this.meta[i]
+      cells[i] = WOOD
+      this.meta[i] = 0
+      this.updated[i] = 1
+      if (h > 1 && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
+        this.write(i - w, SEED)
+        this.meta[i - w] = h - 1
+        this.count++
+        this.updated[i - w] = 1
+      }
       return
     }
     if (this.windPush(x, y, i, WINDAGE[SEED])) return
@@ -1218,11 +1240,11 @@ export class World {
       if (this.rng.chance(0.15)) this.swap(i, below) // drifts down through ponds
       return
     }
-    // Sprout: mud is a seedbed; sand will do if water is within reach.
+    // Sprout: mud is a seedbed; sand will do if water is within reach. The
+    // seed roots as the first wood cell and re-seeds itself above with a
+    // height budget — a tree, grown trunk-cell by trunk-cell.
     if (b === MUD && this.rng.chance(0.02)) {
-      cells[i] = PLANT
-      this.meta[i] = 0
-      this.updated[i] = 1
+      this.sprout(x, y, i)
       return
     }
     if (b === SAND || b === DUST) {
@@ -1231,9 +1253,7 @@ export class World {
         (x + 1 < w && cells[i + 1] === WATER) ||
         (y > 0 && cells[i - w] === WATER)
       if (wet && this.rng.chance(0.02)) {
-        cells[i] = PLANT
-        this.meta[i] = 0
-        this.updated[i] = 1
+        this.sprout(x, y, i)
         return
       }
     }
@@ -1246,13 +1266,26 @@ export class World {
     this.moveTo(i, below + d)
   }
 
+  /** Root a seed: it becomes wood and a climbing seed rises to grow the trunk. */
+  private sprout(x: number, y: number, i: number): void {
+    this.cells[i] = WOOD
+    this.meta[i] = 0
+    this.updated[i] = 1
+    if (y > 0 && this.cells[i - this.w] === EMPTY && this.count < this.budget) {
+      this.write(i - this.w, SEED)
+      this.meta[i - this.w] = 3 + this.rng.int(6) // trunk height to come
+      this.count++
+      this.updated[i - this.w] = 1
+    }
+  }
+
   /**
    * Living green. Grows over and around water — into OPEN cells, not into
    * the pond itself — sipping the water that fuels it. A crowding limit
-   * (a shoot only extends where it isn't hemmed in by other plant) keeps
+   * (a shoot only extends where it isn't hemmed in by other vine) keeps
    * the growth branchy and tendril-like instead of a solid green block.
    */
-  private updatePlant(x: number, y: number, i: number): void {
+  private updateVine(x: number, y: number, i: number): void {
     const { w, cells } = this
     let waterAt = -1
     for (let d = 0; d < 4; d++) {
@@ -1265,7 +1298,7 @@ export class World {
       const n = cells[j]
       if ((n === FIRE || n === LAVA) && this.rng.chance(0.35)) {
         cells[i] = FIRE
-        this.meta[i] = 14 + this.rng.int(14)
+        this.meta[i] = this.fireLife()
         this.updated[i] = 1
         return
       }
@@ -1282,9 +1315,9 @@ export class World {
     if (tx < 0 || tx >= w || ty < 0 || ty >= this.h) return
     const t = ty * w + tx
     if (cells[t] !== EMPTY) return
-    if (this.plantNeighbors(tx, ty, t) > 3) return // crowded: stay branchy
+    if (this.vineNeighbors(tx, ty, t) > 3) return // crowded: stay branchy
     if (this.count >= this.budget) return
-    this.write(t, PLANT)
+    this.write(t, VINE)
     this.count++
     this.updated[t] = 1
     // Growth drinks: about one water cell per few new shoots.
@@ -1297,8 +1330,8 @@ export class World {
     }
   }
 
-  /** 8-neighborhood plant census — the branching (crowding) limit. */
-  private plantNeighbors(x: number, y: number, i: number): number {
+  /** 8-neighborhood vine census — the branching (crowding) limit. */
+  private vineNeighbors(x: number, y: number, i: number): number {
     const { w, cells } = this
     let n = 0
     for (let dy = -1; dy <= 1; dy++) {
@@ -1308,7 +1341,7 @@ export class World {
         if (dx === 0 && dy === 0) continue
         const xx = x + dx
         if (xx < 0 || xx >= w) continue
-        if (cells[i + dy * w + dx] === PLANT) n++
+        if (cells[i + dy * w + dx] === VINE) n++
       }
     }
     return n

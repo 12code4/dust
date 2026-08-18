@@ -17,7 +17,7 @@ export const STONE = 10
 export const GLASS = 11
 export const WOOD = 12
 export const SEED = 13
-export const PLANT = 14
+export const VINE = 14
 export const ICE = 15
 
 export const ELEMENT_COUNT = 16
@@ -37,7 +37,7 @@ export const ELEMENT_NAMES = [
   'glass',
   'wood',
   'seed',
-  'plant',
+  'vine',
   'ice',
 ] as const
 
@@ -65,7 +65,7 @@ export const WINDAGE: readonly number[] = [
   0, // GLASS — static
   0, // WOOD — static
   0.4, // SEED — light enough to scatter on the wind
-  0, // PLANT — static
+  0, // VINE — static
   0, // ICE — static
 ]
 
@@ -173,7 +173,7 @@ export const SHADES: ReadonlyArray<readonly [number, number, number][]> = [
     [0xb4, 0xce, 0x58],
     [0x90, 0xaa, 0x3a],
   ],
-  // PLANT — living green
+  // VINE — living green
   [
     [0x3f, 0xa3, 0x48],
     [0x37, 0x97, 0x40],

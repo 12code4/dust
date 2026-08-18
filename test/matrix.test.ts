@@ -16,7 +16,7 @@ import {
   GLASS,
   WOOD,
   SEED,
-  PLANT,
+  VINE,
   ICE,
 } from '../src/sim/elements.ts'
 
@@ -161,7 +161,7 @@ const PAIR_PROBES: Record<string, Probe> = {
     w.set(3, 3, LAVA)
     w.set(2, 2, LAVA)
     let melted = false
-    for (let t = 0; t < 600 && !melted; t++) {
+    for (let t = 0; t < 2000 && !melted; t++) {
       w.step()
       if (w.get(2, 3) === LAVA) melted = true
     }
@@ -224,9 +224,15 @@ const PAIR_PROBES: Record<string, Probe> = {
       w2.set(4 + k * 4, 20, WOOD)
       w2.meta[20 * 60 + 4 + k * 4] = 1
     }
-    for (let t = 0; t < 250; t++) w2.step()
+    // Long-lived licks may re-burn the falling ash, so observe its existence
+    // during the run rather than only at the end.
+    let sawAsh = false
+    for (let t = 0; t < 250; t++) {
+      w2.step()
+      if (w2.countOf(DUST) > 0) sawAsh = true
+    }
     expect(w2.countOf(WOOD)).toBe(0) // all burnt through
-    expect(w2.countOf(DUST)).toBeGreaterThan(0) // and left ash behind
+    expect(sawAsh).toBe(true) // and left ash behind
   },
   [key(WOOD, LAVA)]: () => {
     const w = new World(20, 20, 19)
@@ -256,8 +262,8 @@ const PAIR_PROBES: Record<string, Probe> = {
     const w = new World(20, 20, 23)
     for (let x = 0; x < 20; x++) w.set(x, 19, MUD)
     w.set(10, 5, SEED)
-    for (let t = 0; t < 400; t++) w.step()
-    expect(w.countOf(PLANT)).toBeGreaterThan(0)
+    for (let t = 0; t < 600; t++) w.step()
+    expect(w.countOf(WOOD)).toBeGreaterThan(2) // a trunk, not just a stump
   },
   [key(SEED, WATER)]: () => {
     // Wet sand sprouts a seed that lands beside a puddle.
@@ -266,7 +272,7 @@ const PAIR_PROBES: Record<string, Probe> = {
     for (let x = 0; x < 6; x++) w.set(x, 18, WATER)
     w.set(7, 5, SEED)
     for (let t = 0; t < 600; t++) w.step()
-    expect(w.countOf(PLANT)).toBeGreaterThan(0)
+    expect(w.countOf(WOOD)).toBeGreaterThan(0)
   },
   [key(SEED, FIRE)]: () => {
     const w = new World(10, 10, 23)
@@ -287,29 +293,29 @@ const PAIR_PROBES: Record<string, Probe> = {
     for (let t = 0; t < 60; t++) w.step()
     expect(w.countOf(SEED)).toBe(0)
   },
-  [key(PLANT, WATER)]: () => {
+  [key(VINE, WATER)]: () => {
     const w = new World(20, 20, 23)
     for (let x = 0; x < 20; x++) for (let y = 15; y < 20; y++) w.set(x, y, WATER)
-    w.set(10, 14, PLANT) // a sprig resting on the pond's surface
-    const plant0 = w.countOf(PLANT)
+    w.set(10, 14, VINE) // a sprig resting on the pond's surface
+    const plant0 = w.countOf(VINE)
     const water0 = w.countOf(WATER)
     for (let t = 0; t < 400; t++) w.step()
-    expect(w.countOf(PLANT)).toBeGreaterThan(plant0 + 4) // grew around the pond…
+    expect(w.countOf(VINE)).toBeGreaterThan(plant0 + 4) // grew around the pond…
     expect(w.countOf(WATER)).toBeGreaterThan(water0 * 0.5) // …without draining it
   },
-  [key(PLANT, FIRE)]: () => {
+  [key(VINE, FIRE)]: () => {
     const w = new World(20, 20, 23)
-    for (let x = 0; x < 20; x++) w.set(x, 19, PLANT)
+    for (let x = 0; x < 20; x++) w.set(x, 19, VINE)
     w.paintDisk(10, 17, 2, FIRE)
     for (let t = 0; t < 200; t++) w.step()
-    expect(w.countOf(PLANT)).toBeLessThan(20)
+    expect(w.countOf(VINE)).toBeLessThan(20)
   },
-  [key(PLANT, LAVA)]: () => {
+  [key(VINE, LAVA)]: () => {
     const w = new World(20, 20, 23)
-    for (let x = 0; x < 20; x++) w.set(x, 19, PLANT)
+    for (let x = 0; x < 20; x++) w.set(x, 19, VINE)
     for (let x = 8; x < 12; x++) w.set(x, 17, LAVA)
     for (let t = 0; t < 200; t++) w.step()
-    expect(w.countOf(PLANT)).toBeLessThan(20)
+    expect(w.countOf(VINE)).toBeLessThan(20)
   },
   [key(ICE, WATER)]: () => {
     const w = new World(20, 20, 29)
