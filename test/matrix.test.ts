@@ -75,11 +75,10 @@ const PAIR_PROBES: Record<string, Probe> = {
     const w = new World(20, 20, 42)
     for (let x = 0; x < 20; x++) w.set(x, 10, FIRE)
     for (let x = 0; x < 20; x++) w.set(x, 9, WATER)
-    // A flame can dodge for a tick by swapping through fresh steam; the slab
-    // still quenches everything within a few steps.
     for (let t = 0; t < 5; t++) w.step()
-    expect(w.countOf(FIRE)).toBe(0)
-    expect(w.countOf(STEAM)).toBeGreaterThan(0)
+    expect(w.countOf(FIRE)).toBe(0) // water kills flame
+    expect(w.countOf(STEAM)).toBeGreaterThan(0) // by boiling a little of itself
+    expect(w.countOf(STEAM) + w.countOf(WATER)).toBe(20)
   },
   [key(WATER, SAND)]: () => {
     const w = new World(20, 30, 7)
@@ -291,10 +290,12 @@ const PAIR_PROBES: Record<string, Probe> = {
   [key(PLANT, WATER)]: () => {
     const w = new World(20, 20, 23)
     for (let x = 0; x < 20; x++) for (let y = 15; y < 20; y++) w.set(x, y, WATER)
-    w.set(10, 14, PLANT) // floating sprig — wait, static: sits atop the pool
+    w.set(10, 14, PLANT) // a sprig resting on the pond's surface
     const plant0 = w.countOf(PLANT)
-    for (let t = 0; t < 300; t++) w.step()
-    expect(w.countOf(PLANT)).toBeGreaterThan(plant0) // it grew into the pond
+    const water0 = w.countOf(WATER)
+    for (let t = 0; t < 400; t++) w.step()
+    expect(w.countOf(PLANT)).toBeGreaterThan(plant0 + 4) // grew around the pond…
+    expect(w.countOf(WATER)).toBeGreaterThan(water0 * 0.5) // …without draining it
   },
   [key(PLANT, FIRE)]: () => {
     const w = new World(20, 20, 23)
@@ -392,14 +393,20 @@ const UNARY_PROBES: Record<number, Probe> = {
     expect(w.countOf(SMOKE)).toBeGreaterThan(0)
   },
   [SMOKE]: () => {
+    // Soot forms as plumes die — though lingering flames may re-burn it, so
+    // observe its existence during the decay, not just at the end.
     const w = new World(30, 40, 11)
     for (let t = 0; t < 120; t++) {
       w.paintDisk(15, 35, 5, FIRE, 0.5)
       w.step()
     }
-    for (let t = 0; t < 500; t++) w.step()
+    let sawSoot = false
+    for (let t = 0; t < 650; t++) {
+      w.step()
+      if (w.countOf(DUST) > 0) sawSoot = true
+    }
     expect(w.countOf(SMOKE)).toBe(0)
-    expect(w.countOf(DUST)).toBeGreaterThan(0)
+    expect(sawSoot).toBe(true)
   },
   [STEAM]: () => {
     const w = new World(20, 20, 5)

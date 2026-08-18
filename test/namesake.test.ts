@@ -65,7 +65,8 @@ describe('dust, the namesake', () => {
       w.step()
     }
     expect(w.countOf(SMOKE)).toBeGreaterThan(5)
-    for (let t = 0; t < 400; t++) w.step() // let every plume decay
+    // Longest fire ≈ 240 ticks + smoke life ≤ 150: give every plume time.
+    for (let t = 0; t < 650; t++) w.step()
     expect(w.countOf(SMOKE)).toBe(0)
     expect(w.countOf(DUST)).toBeGreaterThan(0) // ...and some of it came home
   })

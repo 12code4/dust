@@ -81,7 +81,7 @@ describe('fire and steam', () => {
     const w = new World(30, 30, 42)
     w.paintDisk(15, 25, 4, FIRE)
     expect(w.countOf(FIRE)).toBeGreaterThan(0)
-    for (let t = 0; t < 200; t++) w.step()
+    for (let t = 0; t < 420; t++) w.step() // max life 240 + smoke decay
     expect(w.countOf(FIRE)).toBe(0)
     // What remains is exhaust: steam, smoke, soot-dust, and condensed rain.
     expect(w.count).toBe(
@@ -89,15 +89,15 @@ describe('fire and steam', () => {
     )
   })
 
-  it('is quenched by water into steam', () => {
+  it('is quenched by water — and it is the water that boils to steam', () => {
     const w = new World(20, 20, 42)
     // Fire directly under a slab of water: every flame must touch water.
-    // (A flame can dodge briefly by swapping through fresh steam.)
     for (let x = 0; x < 20; x++) w.set(x, 10, FIRE)
     for (let x = 0; x < 20; x++) w.set(x, 9, WATER)
     for (let t = 0; t < 5; t++) w.step()
-    expect(w.countOf(FIRE)).toBe(0)
-    expect(w.countOf(STEAM)).toBe(20)
+    expect(w.countOf(FIRE)).toBe(0) // flames die outright
+    expect(w.countOf(STEAM)).toBeGreaterThan(0) // some water boiled
+    expect(w.countOf(STEAM) + w.countOf(WATER)).toBe(20) // the rest survives
   })
 
   it('steam eventually dissipates or falls back as rain', () => {

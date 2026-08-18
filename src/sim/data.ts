@@ -65,7 +65,7 @@ export interface Interaction {
 }
 
 export const INTERACTIONS: readonly Interaction[] = [
-  { a: WATER, b: FIRE, effect: 'fire quenched → steam' },
+  { a: WATER, b: FIRE, effect: 'kills the flame; a little of the water boils to steam' },
   { a: WATER, b: SAND, effect: 'wets → mud' },
   { a: WATER, b: DUST, effect: 'wets/soaks → mud' },
   { a: WATER, b: LAVA, effect: 'stone + steam (the terrain printer)' },
@@ -86,7 +86,7 @@ export const INTERACTIONS: readonly Interaction[] = [
   { a: SEED, b: WATER, effect: 'sprouts on wet sand; drifts down through ponds' },
   { a: SEED, b: FIRE, effect: 'pops into flame' },
   { a: SEED, b: LAVA, effect: 'pops into flame' },
-  { a: PLANT, b: WATER, effect: 'grows into it, cell by cell' },
+  { a: PLANT, b: WATER, effect: 'grows around it in branching shoots, sipping the source' },
   { a: PLANT, b: FIRE, effect: 'burns eagerly' },
   { a: PLANT, b: LAVA, effect: 'burns eagerly' },
   { a: ICE, b: WATER, effect: 'freezes it — the glacier creeps' },

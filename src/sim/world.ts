@@ -130,8 +130,13 @@ export class World {
     this.shade[i] = this.rng.next() & 3
     this.impX[i] = 0
     this.impY[i] = 0
-    if (el === FIRE) this.meta[i] = 24 + this.rng.int(48)
-    else if (el === STEAM) this.meta[i] = 60 + this.rng.int(60)
+    if (el === FIRE) {
+      // ~1.5s of assured burn, then a 33% extinction roll every half second
+      // (drawn up-front as a geometric tail so meta stays a simple countdown).
+      let life = 90
+      while (life < 240 && this.rng.chance(0.67)) life += 30
+      this.meta[i] = life
+    } else if (el === STEAM) this.meta[i] = 60 + this.rng.int(60)
     else if (el === SMOKE) this.meta[i] = 80 + this.rng.int(70)
     else if (el === WATER) this.meta[i] = this.rng.next() & 1
     else this.meta[i] = 0
@@ -410,9 +415,11 @@ export class World {
     // Try the probabilistically-dominant axis; if that way is blocked, take
     // the other — matter deflects around obstacles with the flow instead of
     // pinning against them. Heavy matter also blows THROUGH gases (swap), so
-    // a gust drives a stream of grains through its own dust and smoke.
+    // a gust drives a stream of grains through its own dust and smoke — but
+    // gases and flame don't displace each other (a fire must not dodge a
+    // quench by riding its own steam).
     const self = this.cells[i]
-    const selfGas = self === STEAM || self === SMOKE
+    const selfGas = self === STEAM || self === SMOKE || self === FIRE
     const horizFirst = this.rng.chance(ax / (ax + ay))
     for (let attempt = 0; attempt < 2; attempt++) {
       if (horizFirst === (attempt === 0)) {
@@ -645,20 +652,29 @@ export class World {
       -(10 + this.rng.int(41)) * 0.002,
     )
     this.wind.perturbP(x, y, -0.006)
-    if (this.windPush(x, y, i, WINDAGE[FIRE])) return
-    // Quench: touching water turns the flame into a puff of steam.
+    // Quench comes BEFORE wind: a flame touching water dies this tick, no
+    // dodging downwind first. And it's the WATER that may boil into steam,
+    // not the fire — steam is water's ghost, not fire's.
     const { w, cells } = this
-    if (
-      (y + 1 < this.h && cells[i + w] === WATER) ||
-      (y > 0 && cells[i - w] === WATER) ||
-      (x > 0 && cells[i - 1] === WATER) ||
-      (x + 1 < w && cells[i + 1] === WATER)
-    ) {
-      cells[i] = STEAM
-      this.meta[i] = 60 + this.rng.int(60)
-      this.updated[i] = 1
+    const wj =
+      y + 1 < this.h && cells[i + w] === WATER ? i + w
+      : y > 0 && cells[i - w] === WATER ? i - w
+      : x > 0 && cells[i - 1] === WATER ? i - 1
+      : x + 1 < w && cells[i + 1] === WATER ? i + 1
+      : -1
+    if (wj >= 0) {
+      if (this.rng.chance(0.25)) {
+        cells[wj] = STEAM
+        this.meta[wj] = 60 + this.rng.int(60)
+        this.updated[wj] = 1
+      }
+      cells[i] = EMPTY
+      this.meta[i] = 0
+      this.shade[i] = 0
+      this.count--
       return
     }
+    if (this.windPush(x, y, i, WINDAGE[FIRE])) return
     const life = this.meta[i]
     if (life <= 1) {
       // Fire's receipt: some becomes smoke; most just goes out.
@@ -1040,7 +1056,7 @@ export class World {
       (x + 1 < w && cells[i + 1] === LAVA) ||
       (y > 0 && cells[i - w] === LAVA) ||
       (y + 1 < this.h && cells[i + w] === LAVA)
-    if (nearLava && this.rng.chance(0.008)) {
+    if (nearLava && this.rng.chance(0.04)) {
       cells[i] = LAVA
       this.meta[i] = 0
       this.updated[i] = 1
@@ -1231,11 +1247,14 @@ export class World {
   }
 
   /**
-   * Living green. Grows INTO adjacent water, one cell at a time — ponds
-   * become gardens, PG-vine style. Burns eagerly.
+   * Living green. Grows over and around water — into OPEN cells, not into
+   * the pond itself — sipping the water that fuels it. A crowding limit
+   * (a shoot only extends where it isn't hemmed in by other plant) keeps
+   * the growth branchy and tendril-like instead of a solid green block.
    */
   private updatePlant(x: number, y: number, i: number): void {
     const { w, cells } = this
+    let waterAt = -1
     for (let d = 0; d < 4; d++) {
       const j =
         d === 0 ? (x > 0 ? i - 1 : -1)
@@ -1250,13 +1269,49 @@ export class World {
         this.updated[i] = 1
         return
       }
-      if (n === WATER && this.rng.chance(0.08)) {
-        cells[j] = PLANT // drink and grow
-        this.meta[j] = 0
-        this.updated[j] = 1
-        return
+      if (n === WATER) waterAt = j
+    }
+    if (waterAt < 0 || !this.rng.chance(0.15)) return // no source, no growth
+    // Shoot direction: mostly lateral, so vines creep along the waterline
+    // (shoots that climb away from water stop growing — by design — which
+    // reads as stubs and sprigs above a spreading green fringe).
+    const r = this.rng.int(10)
+    const d = r < 3 ? 0 : r < 6 ? 1 : r < 9 ? 2 : 3
+    const tx = d === 0 ? x - 1 : d === 1 ? x + 1 : x
+    const ty = d === 2 ? y - 1 : d === 3 ? y + 1 : y
+    if (tx < 0 || tx >= w || ty < 0 || ty >= this.h) return
+    const t = ty * w + tx
+    if (cells[t] !== EMPTY) return
+    if (this.plantNeighbors(tx, ty, t) > 3) return // crowded: stay branchy
+    if (this.count >= this.budget) return
+    this.write(t, PLANT)
+    this.count++
+    this.updated[t] = 1
+    // Growth drinks: about one water cell per few new shoots.
+    if (this.rng.chance(0.3)) {
+      cells[waterAt] = EMPTY
+      this.meta[waterAt] = 0
+      this.shade[waterAt] = 0
+      this.count--
+      this.updated[waterAt] = 1
+    }
+  }
+
+  /** 8-neighborhood plant census — the branching (crowding) limit. */
+  private plantNeighbors(x: number, y: number, i: number): number {
+    const { w, cells } = this
+    let n = 0
+    for (let dy = -1; dy <= 1; dy++) {
+      const yy = y + dy
+      if (yy < 0 || yy >= this.h) continue
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue
+        const xx = x + dx
+        if (xx < 0 || xx >= w) continue
+        if (cells[i + dy * w + dx] === PLANT) n++
       }
     }
+    return n
   }
 
   /**
