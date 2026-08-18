@@ -92,9 +92,10 @@ describe('fire and steam', () => {
   it('is quenched by water into steam', () => {
     const w = new World(20, 20, 42)
     // Fire directly under a slab of water: every flame must touch water.
+    // (A flame can dodge briefly by swapping through fresh steam.)
     for (let x = 0; x < 20; x++) w.set(x, 10, FIRE)
     for (let x = 0; x < 20; x++) w.set(x, 9, WATER)
-    w.step()
+    for (let t = 0; t < 5; t++) w.step()
     expect(w.countOf(FIRE)).toBe(0)
     expect(w.countOf(STEAM)).toBe(20)
   })

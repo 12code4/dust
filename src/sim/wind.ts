@@ -115,7 +115,9 @@ export class Wind {
         if (x < 0 || x >= this.cw) continue
         const d2 = dx * dx + dy * dy
         if (d2 > cr * cr) continue
-        const fall = 1 - Math.sqrt(d2) / (cr + 1)
+        // Squared falloff, boosted: a gust has a hard core and soft edges.
+        const t = 1 - Math.sqrt(d2) / (cr + 1)
+        const fall = t * t * 1.5
         const i = y * this.cw + x
         this.vx[i] += dvx * fall
         this.vy[i] += dvy * fall
@@ -127,7 +129,7 @@ export class Wind {
     const { cw, ch, vx, vy, p, bx, by, bp, solid } = this
     const DIFFUSE = 0.25 // low spread keeps gusts coherent so they travel far
     const DECAY = 0.985 // slow decay makes wind linger (half-life ≈ 46 ticks)
-    const MAX = 3 // clamp (air cells per tick) — keeps the field stable
+    const MAX = 4 // clamp (air cells per tick) — keeps the field stable
     const PDIFFUSE = 0.2
     const PDECAY = 0.96
     const PMAX = 6

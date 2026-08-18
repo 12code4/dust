@@ -139,12 +139,25 @@ describe('ballistics (the drag tool throw)', () => {
       for (let x = 51; x < 100; x++) expect(w.get(x, y)).not.toBe(SAND)
   })
 
-  it('dragMove hauls a dot and conserves it', () => {
+  it('dragMove hauls a dot, reports its new index, and conserves it', () => {
     const w = new World(60, 40, 3)
     w.set(20, 39, WATER)
-    const moved = w.dragMove(20, 39, 5, -3)
-    expect(moved).toBe(true)
+    const j = w.dragMove(20, 39, 5, -3)
+    expect(j).toBe(36 * 60 + 25)
     expect(w.countOf(WATER)).toBe(1)
     expect(w.get(25, 36)).toBe(WATER)
+  })
+
+  it('held cells sit still against gravity until released', () => {
+    const w = new World(20, 40, 3)
+    w.set(10, 5, SAND)
+    w.held = [5 * 20 + 10]
+    for (let t = 0; t < 30; t++) w.step()
+    expect(w.get(10, 5)).toBe(SAND) // suspended in the hand
+    w.held = null
+    for (let t = 0; t < 60; t++) w.step()
+    let onFloor = false
+    for (let x = 0; x < 20; x++) if (w.get(x, 39) === SAND) onFloor = true
+    expect(onFloor).toBe(true) // released: falls (wobble may shift the column)
   })
 })

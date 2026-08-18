@@ -15,8 +15,12 @@ export const MUD = 8
 export const LAVA = 9
 export const STONE = 10
 export const GLASS = 11
+export const WOOD = 12
+export const SEED = 13
+export const PLANT = 14
+export const ICE = 15
 
-export const ELEMENT_COUNT = 12
+export const ELEMENT_COUNT = 16
 
 export const ELEMENT_NAMES = [
   'empty',
@@ -31,6 +35,10 @@ export const ELEMENT_NAMES = [
   'lava',
   'stone',
   'glass',
+  'wood',
+  'seed',
+  'plant',
+  'ice',
 ] as const
 
 /** Elements that count against the dot budget (walls are scenery, not dots). */
@@ -55,6 +63,10 @@ export const WINDAGE: readonly number[] = [
   0.02, // LAVA — molten rock ignores weather
   0.02, // STONE
   0, // GLASS — static
+  0, // WOOD — static
+  0.4, // SEED — light enough to scatter on the wind
+  0, // PLANT — static
+  0, // ICE — static
 ]
 
 /**
@@ -146,5 +158,33 @@ export const SHADES: ReadonlyArray<readonly [number, number, number][]> = [
     [0xaa, 0xcc, 0xd4],
     [0xc8, 0xe4, 0xe8],
     [0x9c, 0xc0, 0xc8],
+  ],
+  // WOOD — dry timber browns
+  [
+    [0x8b, 0x66, 0x3d],
+    [0x81, 0x5c, 0x35],
+    [0x95, 0x70, 0x45],
+    [0x77, 0x52, 0x2d],
+  ],
+  // SEED — yellow-green kernels
+  [
+    [0xa8, 0xc2, 0x4e],
+    [0x9c, 0xb6, 0x44],
+    [0xb4, 0xce, 0x58],
+    [0x90, 0xaa, 0x3a],
+  ],
+  // PLANT — living green
+  [
+    [0x3f, 0xa3, 0x48],
+    [0x37, 0x97, 0x40],
+    [0x47, 0xaf, 0x50],
+    [0x2f, 0x8b, 0x38],
+  ],
+  // ICE — glacial blue
+  [
+    [0x9c, 0xc8, 0xf0],
+    [0x8e, 0xba, 0xe4],
+    [0xaa, 0xd6, 0xfc],
+    [0x80, 0xac, 0xd8],
   ],
 ]

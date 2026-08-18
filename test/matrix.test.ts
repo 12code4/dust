@@ -2,7 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { World } from '../src/sim/world.ts'
 import { ELEMENT_PROPS, INTERACTIONS, UNARY, IMPLEMENTED, elementName } from '../src/sim/data.ts'
 import { WINDAGE, ELEMENT_COUNT, SHADES, ELEMENT_NAMES } from '../src/sim/elements.ts'
-import { WALL, SAND, WATER, FIRE, STEAM, DUST, SMOKE, MUD, LAVA, STONE, GLASS } from '../src/sim/elements.ts'
+import {
+  WALL,
+  SAND,
+  WATER,
+  FIRE,
+  STEAM,
+  DUST,
+  SMOKE,
+  MUD,
+  LAVA,
+  STONE,
+  GLASS,
+  WOOD,
+  SEED,
+  PLANT,
+  ICE,
+} from '../src/sim/elements.ts'
 
 /**
  * THE COMPLETENESS GATE (docs/04 §5). An element does not exist until its
@@ -59,7 +75,9 @@ const PAIR_PROBES: Record<string, Probe> = {
     const w = new World(20, 20, 42)
     for (let x = 0; x < 20; x++) w.set(x, 10, FIRE)
     for (let x = 0; x < 20; x++) w.set(x, 9, WATER)
-    w.step()
+    // A flame can dodge for a tick by swapping through fresh steam; the slab
+    // still quenches everything within a few steps.
+    for (let t = 0; t < 5; t++) w.step()
     expect(w.countOf(FIRE)).toBe(0)
     expect(w.countOf(STEAM)).toBeGreaterThan(0)
   },
@@ -188,6 +206,178 @@ const PAIR_PROBES: Record<string, Probe> = {
     for (let t = 0; t < 120; t++) w.step()
     expect(w.countOf(WATER)).toBeGreaterThan(0)
   },
+  [key(WOOD, FIRE)]: () => {
+    // Ignition: flame held to a log catches it (meta > 0 = burning).
+    const w = new World(20, 20, 19)
+    for (let x = 5; x < 15; x++) w.set(x, 19, WOOD)
+    let caught = false
+    for (let t = 0; t < 120 && !caught; t++) {
+      w.paintDisk(10, 17, 2, FIRE, 0.5)
+      w.step()
+      for (let x = 5; x < 15; x++) if (w.meta[19 * 20 + x] > 0) caught = true
+    }
+    expect(caught).toBe(true)
+    // Burn-through: isolated burning beams crumble, some into ash-dust
+    // (isolated in mid-air so their own flames — which rise — can't consume
+    // the ash, which falls).
+    const w2 = new World(60, 40, 19)
+    for (let k = 0; k < 14; k++) {
+      w2.set(4 + k * 4, 20, WOOD)
+      w2.meta[20 * 60 + 4 + k * 4] = 1
+    }
+    for (let t = 0; t < 250; t++) w2.step()
+    expect(w2.countOf(WOOD)).toBe(0) // all burnt through
+    expect(w2.countOf(DUST)).toBeGreaterThan(0) // and left ash behind
+  },
+  [key(WOOD, LAVA)]: () => {
+    const w = new World(20, 20, 19)
+    for (let x = 0; x < 20; x++) w.set(x, 19, WOOD)
+    for (let x = 8; x < 12; x++) w.set(x, 17, LAVA)
+    let caught = false
+    for (let t = 0; t < 400 && !caught; t++) {
+      w.step()
+      for (let x = 0; x < 20; x++)
+        if (w.get(x, 19) === WOOD && w.meta[19 * 20 + x] > 0) caught = true
+      if (w.countOf(WOOD) < 20) caught = true // or already burnt through
+    }
+    expect(caught).toBe(true)
+  },
+  [key(WOOD, WATER)]: () => {
+    // Douse: a burning log with water pinned beside it stops burning.
+    const w = new World(10, 10, 19)
+    w.set(3, 9, WALL) // pin the water so it can't flow away first
+    w.set(5, 9, WOOD)
+    w.meta[9 * 10 + 5] = 10 // mid-burn
+    w.set(4, 9, WATER)
+    w.step()
+    expect(w.get(5, 9)).toBe(WOOD)
+    expect(w.meta[9 * 10 + 5]).toBe(0) // the char survives, fire is out
+  },
+  [key(SEED, MUD)]: () => {
+    const w = new World(20, 20, 23)
+    for (let x = 0; x < 20; x++) w.set(x, 19, MUD)
+    w.set(10, 5, SEED)
+    for (let t = 0; t < 400; t++) w.step()
+    expect(w.countOf(PLANT)).toBeGreaterThan(0)
+  },
+  [key(SEED, WATER)]: () => {
+    // Wet sand sprouts a seed that lands beside a puddle.
+    const w = new World(20, 20, 23)
+    for (let x = 0; x < 20; x++) w.set(x, 19, SAND)
+    for (let x = 0; x < 6; x++) w.set(x, 18, WATER)
+    w.set(7, 5, SEED)
+    for (let t = 0; t < 600; t++) w.step()
+    expect(w.countOf(PLANT)).toBeGreaterThan(0)
+  },
+  [key(SEED, FIRE)]: () => {
+    const w = new World(10, 10, 23)
+    w.set(5, 9, SEED)
+    w.set(4, 9, FIRE)
+    let popped = false
+    for (let t = 0; t < 30 && !popped; t++) {
+      w.paintDisk(4, 9, 1, FIRE, 0.5)
+      w.step()
+      if (w.countOf(SEED) === 0) popped = true
+    }
+    expect(popped).toBe(true)
+  },
+  [key(SEED, LAVA)]: () => {
+    const w = new World(10, 12, 23)
+    for (let x = 0; x < 10; x++) w.set(x, 11, LAVA)
+    w.set(5, 3, SEED)
+    for (let t = 0; t < 60; t++) w.step()
+    expect(w.countOf(SEED)).toBe(0)
+  },
+  [key(PLANT, WATER)]: () => {
+    const w = new World(20, 20, 23)
+    for (let x = 0; x < 20; x++) for (let y = 15; y < 20; y++) w.set(x, y, WATER)
+    w.set(10, 14, PLANT) // floating sprig — wait, static: sits atop the pool
+    const plant0 = w.countOf(PLANT)
+    for (let t = 0; t < 300; t++) w.step()
+    expect(w.countOf(PLANT)).toBeGreaterThan(plant0) // it grew into the pond
+  },
+  [key(PLANT, FIRE)]: () => {
+    const w = new World(20, 20, 23)
+    for (let x = 0; x < 20; x++) w.set(x, 19, PLANT)
+    w.paintDisk(10, 17, 2, FIRE)
+    for (let t = 0; t < 200; t++) w.step()
+    expect(w.countOf(PLANT)).toBeLessThan(20)
+  },
+  [key(PLANT, LAVA)]: () => {
+    const w = new World(20, 20, 23)
+    for (let x = 0; x < 20; x++) w.set(x, 19, PLANT)
+    for (let x = 8; x < 12; x++) w.set(x, 17, LAVA)
+    for (let t = 0; t < 200; t++) w.step()
+    expect(w.countOf(PLANT)).toBeLessThan(20)
+  },
+  [key(ICE, WATER)]: () => {
+    const w = new World(20, 20, 29)
+    for (let x = 0; x < 20; x++) for (let y = 15; y < 20; y++) w.set(x, y, WATER)
+    w.set(10, 14, ICE) // seed crystal on the pond
+    const ice0 = w.countOf(ICE)
+    for (let t = 0; t < 600; t++) w.step()
+    expect(w.countOf(ICE)).toBeGreaterThan(ice0) // the glacier crept
+  },
+  [key(ICE, FIRE)]: () => {
+    const w = new World(10, 10, 29)
+    w.set(5, 9, ICE)
+    let melted = false
+    for (let t = 0; t < 80 && !melted; t++) {
+      w.paintDisk(4, 8, 1, FIRE, 0.6)
+      w.step()
+      if (w.countOf(ICE) === 0) melted = true
+    }
+    expect(melted).toBe(true)
+  },
+  [key(ICE, LAVA)]: () => {
+    // R3: both pay — the meeting yields water AND stone. Products may be
+    // consumed again by the remaining pool (stone remelts, water boils), so
+    // observe their existence during the run, not just at the end.
+    const w = new World(12, 12, 29)
+    for (let x = 0; x < 12; x++) w.set(x, 11, ICE)
+    for (let x = 4; x < 8; x++) w.set(x, 9, LAVA)
+    let sawWater = false
+    let sawStone = false
+    for (let t = 0; t < 200 && !(sawWater && sawStone); t++) {
+      w.step()
+      if (w.countOf(WATER) + w.countOf(STEAM) > 0) sawWater = true
+      if (w.countOf(STONE) > 0) sawStone = true
+    }
+    expect(sawWater).toBe(true)
+    expect(sawStone).toBe(true)
+  },
+  [key(ICE, STEAM)]: () => {
+    const w = new World(20, 30, 29)
+    for (let x = 0; x < 20; x++) w.set(x, 10, ICE) // cold ceiling
+    w.paintDisk(10, 20, 4, STEAM)
+    for (let t = 0; t < 120; t++) w.step()
+    expect(w.countOf(WATER)).toBeGreaterThan(0)
+  },
+  [key(ICE, SAND)]: () => {
+    // R32's observable is the footprint: the same pour scatters into a wide
+    // drift on ice (grains skate to the edges) vs a tight pyramid on stone.
+    expect(pourFootprint(SAND, ICE)).toBeGreaterThan(pourFootprint(SAND, STONE) * 1.5)
+  },
+}
+
+/** Columns occupied by the powder after a fixed pour + settle. */
+function pourFootprint(powder: number, floor: number): number {
+  const w = new World(61, 40, 29)
+  for (let x = 0; x < 61; x++) w.set(x, 39, floor)
+  for (let t = 0; t < 100; t++) {
+    w.set(30, 0, powder)
+    w.step()
+  }
+  for (let t = 0; t < 400; t++) w.step()
+  let cols = 0
+  for (let x = 0; x < 61; x++) {
+    for (let y = 0; y < 39; y++)
+      if (w.get(x, y) === powder) {
+        cols++
+        break
+      }
+  }
+  return cols
 }
 
 // ---- unary probes ---------------------------------------------------------

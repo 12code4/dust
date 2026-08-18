@@ -10,6 +10,10 @@ import {
   LAVA,
   STONE,
   GLASS,
+  WOOD,
+  SEED,
+  PLANT,
+  ICE,
   ELEMENT_COUNT,
   ELEMENT_NAMES,
 } from './elements.ts'
@@ -42,6 +46,10 @@ export const ELEMENT_PROPS: Readonly<Record<number, ElementProps>> = {
   [LAVA]: { state: 'liquid', density: 3.0 },
   [STONE]: { state: 'powder', density: 2.6 },
   [GLASS]: { state: 'static', density: 2.5 },
+  [WOOD]: { state: 'static', density: 1.5 },
+  [SEED]: { state: 'powder', density: 1.1 },
+  [PLANT]: { state: 'static', density: 1.2 },
+  [ICE]: { state: 'static', density: 0.92 },
 }
 
 /**
@@ -71,6 +79,21 @@ export const INTERACTIONS: readonly Interaction[] = [
   { a: LAVA, b: GLASS, effect: 'softens back into the melt (slow)' },
   { a: SAND, b: FIRE, effect: 'smothers the flame' },
   { a: STEAM, b: GLASS, effect: 'condenses → water on the pane' },
+  { a: WOOD, b: FIRE, effect: 'catches slowly, burns in place, crumbles to ash-dust' },
+  { a: WOOD, b: LAVA, effect: 'ignites (as fire does)' },
+  { a: WOOD, b: WATER, effect: 'douses a burning log' },
+  { a: SEED, b: MUD, effect: 'sprouts → plant' },
+  { a: SEED, b: WATER, effect: 'sprouts on wet sand; drifts down through ponds' },
+  { a: SEED, b: FIRE, effect: 'pops into flame' },
+  { a: SEED, b: LAVA, effect: 'pops into flame' },
+  { a: PLANT, b: WATER, effect: 'grows into it, cell by cell' },
+  { a: PLANT, b: FIRE, effect: 'burns eagerly' },
+  { a: PLANT, b: LAVA, effect: 'burns eagerly' },
+  { a: ICE, b: WATER, effect: 'freezes it — the glacier creeps' },
+  { a: ICE, b: FIRE, effect: 'melts → water' },
+  { a: ICE, b: LAVA, effect: 'both pay: ice → water, lava → stone (R3)' },
+  { a: ICE, b: STEAM, effect: 'condenses → water on the cold face' },
+  { a: ICE, b: SAND, effect: 'frictionless: grains skate off (R32)' },
 ]
 
 /**

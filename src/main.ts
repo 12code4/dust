@@ -11,6 +11,10 @@ import {
   LAVA,
   STONE,
   GLASS,
+  WOOD,
+  SEED,
+  PLANT,
+  ICE,
   EMPTY,
   SHADES,
 } from './sim/elements.ts'
@@ -36,6 +40,10 @@ const TOOLS: Tool[] = [
   { name: 'fire', el: FIRE, density: 0.3 },
   { name: 'smoke', el: SMOKE, density: 0.5 },
   { name: 'glass', el: GLASS, density: 1 },
+  { name: 'wood', el: WOOD, density: 1 },
+  { name: 'seed', el: SEED, density: 0.4 },
+  { name: 'plant', el: PLANT, density: 1 },
+  { name: 'ice', el: ICE, density: 1 },
   { name: '💨 wind', el: WIND_TOOL, density: 1 },
   { name: '🖐 drag', el: DRAG_TOOL, density: 1 },
   { name: 'erase', el: EMPTY, density: 1 },
@@ -87,6 +95,24 @@ controls.append(
   button('+', () => setPen(pen + 1)),
 )
 setPen(pen)
+
+// Sim speed stepper: ⏪ ×1 ⏩ over 1/8× … 8× (halving/doubling steps).
+let simSpeed = 1
+const speedLabel = document.createElement('span')
+speedLabel.className = 'pen-label'
+function setSpeed(v: number): void {
+  simSpeed = Math.max(0.125, Math.min(8, v))
+  speedLabel.textContent = simSpeed >= 1 ? `×${simSpeed}` : `×1/${1 / simSpeed}`
+}
+const sep0 = document.createElement('div')
+sep0.className = 'sep'
+controls.append(
+  sep0,
+  button('⏪', () => setSpeed(simSpeed / 2)),
+  speedLabel,
+  button('⏩', () => setSpeed(simSpeed * 2)),
+)
+setSpeed(1)
 const sep = document.createElement('div')
 sep.className = 'sep'
 controls.append(
@@ -144,63 +170,86 @@ const windInput = {
 }
 
 /**
- * Drag input: grab whatever's under the pen, haul it with the cursor
- * (collision-checked), and on release the tracked hand speed becomes real
- * particle velocity — the throw is pure ballistics, no wind involved.
+ * Drag input: the dots under the pen at CLICK time are grabbed and stay
+ * grabbed — held in the hand against gravity (the sim skips held cells) and
+ * hauled with the cursor in formation, collision-checked. Release throws
+ * them with the tracked hand speed as real ballistic velocity.
  */
+type Grabbed = { i: number; ox: number; oy: number }
 const dragInput = {
   active: false,
-  lastX: 0,
-  lastY: 0,
+  grabbed: [] as Grabbed[],
   curX: 0,
   curY: 0,
   vX: 0, // cursor velocity EMA, cells/tick
   vY: 0,
 }
 
-function pumpDrag(): void {
-  if (!dragInput.active) return
-  const clamp6 = (v: number) => (v > 6 ? 6 : v < -6 ? -6 : v)
-  const dx = clamp6(dragInput.curX - dragInput.lastX)
-  const dy = clamp6(dragInput.curY - dragInput.lastY)
-  dragInput.vX = dragInput.vX * 0.7 + dx * 0.3
-  dragInput.vY = dragInput.vY * 0.7 + dy * 0.3
-  if (dx !== 0 || dy !== 0) {
-    // Haul the disk, far side of the motion first so followers find room.
-    const r = pen + 1
-    const xs: number[] = []
-    const ys: number[] = []
-    for (let o = -r; o <= r; o++) {
-      xs.push(o)
-      ys.push(o)
-    }
-    if (dx > 0) xs.reverse()
-    if (dy > 0) ys.reverse()
-    for (const oy of ys) {
-      for (const ox of xs) {
-        if (ox * ox + oy * oy > r * r) continue
-        world.dragMove(dragInput.lastX + ox, dragInput.lastY + oy, dx, dy)
-      }
-    }
-  }
-  dragInput.lastX = dragInput.curX
-  dragInput.lastY = dragInput.curY
-}
-
-function releaseDrag(): void {
-  if (!dragInput.active) return
-  dragInput.active = false
-  // The throw: hand speed (cells/tick) → particle velocity (quarter-cells).
-  const qvx = Math.round(dragInput.vX * 5)
-  const qvy = Math.round(dragInput.vY * 5)
-  if (qvx === 0 && qvy === 0) return
+function beginDrag(x: number, y: number): void {
+  dragInput.active = true
+  dragInput.grabbed = []
+  dragInput.curX = x
+  dragInput.curY = y
+  dragInput.vX = 0
+  dragInput.vY = 0
   const r = pen + 1
   for (let oy = -r; oy <= r; oy++) {
     for (let ox = -r; ox <= r; ox++) {
       if (ox * ox + oy * oy > r * r) continue
-      world.setImpulse(dragInput.curX + ox, dragInput.curY + oy, qvx, qvy)
+      const cx = x + ox
+      const cy = y + oy
+      if (cx < 0 || cx >= world.w || cy < 0 || cy >= world.h) continue
+      const i = cy * world.w + cx
+      const el = world.cells[i]
+      if (el !== EMPTY && el !== WALL) dragInput.grabbed.push({ i, ox, oy })
     }
   }
+  world.held = dragInput.grabbed.map((g) => g.i)
+}
+
+function pumpDrag(): void {
+  if (!dragInput.active) return
+  const clamp6 = (v: number) => (v > 6 ? 6 : v < -6 ? -6 : v)
+  // Pull each grabbed dot toward its formation slot around the cursor.
+  let mx = 0
+  let my = 0
+  let n = 0
+  for (const g of dragInput.grabbed) {
+    const cx = g.i % world.w
+    const cy = (g.i / world.w) | 0
+    const dx = clamp6(dragInput.curX + g.ox - cx)
+    const dy = clamp6(dragInput.curY + g.oy - cy)
+    if (dx !== 0 || dy !== 0) {
+      const j = world.dragMove(cx, cy, dx, dy)
+      if (j >= 0) g.i = j
+    }
+    mx += dx
+    my += dy
+    n++
+  }
+  // Hand velocity: how fast the formation is actually being hauled.
+  if (n > 0) {
+    dragInput.vX = dragInput.vX * 0.7 + (mx / n) * 0.3
+    dragInput.vY = dragInput.vY * 0.7 + (my / n) * 0.3
+  }
+  world.held = dragInput.grabbed.map((g) => g.i)
+}
+
+function releaseDrag(withThrow: boolean): void {
+  if (!dragInput.active) return
+  dragInput.active = false
+  world.held = null
+  if (withThrow) {
+    // The throw: hand speed (cells/tick) → particle velocity (quarter-cells).
+    const qvx = Math.round(dragInput.vX * 5)
+    const qvy = Math.round(dragInput.vY * 5)
+    if (qvx !== 0 || qvy !== 0) {
+      for (const g of dragInput.grabbed) {
+        world.setImpulse(g.i % world.w, (g.i / world.w) | 0, qvx, qvy)
+      }
+    }
+  }
+  dragInput.grabbed = []
   dragInput.vX = 0
   dragInput.vY = 0
 }
@@ -212,7 +261,7 @@ function pumpWind(): void {
     return
   }
   if (windInput.dirX === 0 && windInput.dirY === 0) return // no aim yet
-  const s = 0.5 + pen * 0.28 // breath at pen 0, gale at pen 9
+  const s = 0.9 + pen * 0.42 // breath at pen 0, gale at pen 9
   world.wind.addImpulse(
     windInput.curX,
     windInput.curY,
@@ -264,13 +313,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return
   }
   if (tool.el === DRAG_TOOL) {
-    dragInput.active = true
-    dragInput.lastX = x
-    dragInput.lastY = y
-    dragInput.curX = x
-    dragInput.curY = y
-    dragInput.vX = 0
-    dragInput.vY = 0
+    beginDrag(x, y)
     return
   }
   drawing = true
@@ -312,13 +355,13 @@ canvas.addEventListener('pointerup', (e) => {
   if (!e.isPrimary) return
   drawing = false
   windInput.active = false
-  releaseDrag() // the throw happens here
+  releaseDrag(true) // the throw happens here
 })
 canvas.addEventListener('pointercancel', (e) => {
   if (!e.isPrimary) return
   drawing = false
   windInput.active = false
-  dragInput.active = false // cancelled, no throw
+  releaseDrag(false) // cancelled: set down gently, no throw
 })
 canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 canvas.addEventListener(
@@ -334,7 +377,6 @@ canvas.addEventListener(
 
 const SIM_HZ = 60
 const STEP_MS = 1000 / SIM_HZ
-const MAX_STEPS = 4 // don't spiral after a background-tab stall
 
 const dotsEl = document.getElementById('dots')!
 const fpsEl = document.getElementById('fps')!
@@ -354,8 +396,10 @@ function frame(now: number): void {
   acc += dt
   let steps = 0
   let stepped = 0 // ticks the sim actually ran — paused frames must not feed the EMA
+  const stepMs = STEP_MS / simSpeed // speed stepper stretches or packs ticks
+  const maxSteps = Math.ceil(simSpeed) + 3 // allow bursts at high speed, no spirals
   const t0 = performance.now()
-  while (acc >= STEP_MS && steps < MAX_STEPS) {
+  while (acc >= stepMs && steps < maxSteps) {
     if (!paused || stepOnce) {
       pumpWind() // held wind/vacuum streams into every tick
       pumpDrag() // held drag hauls its catch along
@@ -364,10 +408,10 @@ function frame(now: number): void {
       stepOnce = false
       stepped++
     }
-    acc -= STEP_MS
+    acc -= stepMs
     steps++
   }
-  if (acc >= STEP_MS) acc = 0 // dropped ticks; keep real-time feel
+  if (acc >= stepMs) acc = 0 // dropped ticks; keep real-time feel
   if (stepped > 0) simEma += ((performance.now() - t0) / stepped - simEma) * 0.1
 
   // Aim indicator: a short red line from the pointer along the blow direction.

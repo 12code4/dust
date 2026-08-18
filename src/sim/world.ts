@@ -13,6 +13,10 @@ import {
   LAVA,
   STONE,
   GLASS,
+  WOOD,
+  SEED,
+  PLANT,
+  ICE,
   isDot,
   WINDAGE,
 } from './elements.ts'
@@ -48,6 +52,12 @@ export class World {
   readonly impX: Int8Array
   readonly impY: Int8Array
   readonly wind: Wind
+  /**
+   * Cells currently held by the drag tool: the sim marks them updated at the
+   * start of each tick, so gravity and element rules leave them in the hand
+   * until released.
+   */
+  held: readonly number[] | null = null
   private readonly updated: Uint8Array
   private rng: Prng
   frame = 0
@@ -143,6 +153,7 @@ export class World {
   step(): void {
     this.wind.step()
     this.updated.fill(0)
+    if (this.held) for (const hi of this.held) this.updated[hi] = 1
     this.frame++
     const { w, h, cells, updated } = this
     for (let y = h - 1; y >= 0; y--) {
@@ -189,6 +200,18 @@ export class World {
             break
           case GLASS:
             this.updateGlass(x, y, i)
+            break
+          case WOOD:
+            this.updateWood(x, y, i)
+            break
+          case SEED:
+            this.updateSeed(x, y, i)
+            break
+          case PLANT:
+            this.updatePlant(x, y, i)
+            break
+          case ICE:
+            this.updateIce(x, y, i)
             break
         }
       }
@@ -344,13 +367,14 @@ export class World {
 
   /**
    * Drag-tool haul: shift the dot at (x, y) by up to (dx, dy) immediately,
-   * collision-checked. Returns true if it moved.
+   * collision-checked. Returns the dot's new cell index (unchanged if it
+   * couldn't move), or -1 if there is no draggable dot there.
    */
-  dragMove(x: number, y: number, dx: number, dy: number): boolean {
-    if (!this.inBounds(x, y)) return false
+  dragMove(x: number, y: number, dx: number, dy: number): number {
+    if (!this.inBounds(x, y)) return -1
     const i = y * this.w + x
     const el = this.cells[i]
-    if (el === EMPTY || el === WALL) return false
+    if (el === EMPTY || el === WALL) return -1
     const j = this.lineWalk(
       i,
       x,
@@ -360,9 +384,8 @@ export class World {
       dx > 0 ? 1 : -1,
       dy > 0 ? 1 : -1,
     )
-    if (j === i) return false
-    this.moveTo(i, j)
-    return true
+    if (j !== i) this.moveTo(i, j)
+    return j
   }
 
   // ---- element behaviors -------------------------------------------------
@@ -386,22 +409,39 @@ export class World {
     if (!this.rng.chance(m > 0.95 ? 0.95 : m)) return false
     // Try the probabilistically-dominant axis; if that way is blocked, take
     // the other — matter deflects around obstacles with the flow instead of
-    // pinning against them.
+    // pinning against them. Heavy matter also blows THROUGH gases (swap), so
+    // a gust drives a stream of grains through its own dust and smoke.
+    const self = this.cells[i]
+    const selfGas = self === STEAM || self === SMOKE
     const horizFirst = this.rng.chance(ax / (ax + ay))
     for (let attempt = 0; attempt < 2; attempt++) {
       if (horizFirst === (attempt === 0)) {
         const d = wx > 0 ? 1 : -1
         const nx = x + d
-        if (ax > 0.02 && nx >= 0 && nx < this.w && this.cells[i + d] === EMPTY) {
-          this.moveTo(i, i + d)
-          return true
+        if (ax > 0.02 && nx >= 0 && nx < this.w) {
+          const t = this.cells[i + d]
+          if (t === EMPTY) {
+            this.moveTo(i, i + d)
+            return true
+          }
+          if (!selfGas && (t === STEAM || t === SMOKE)) {
+            this.swap(i, i + d)
+            return true
+          }
         }
       } else {
         const d = wy > 0 ? 1 : -1
         const ny = y + d
-        if (ay > 0.02 && ny >= 0 && ny < this.h && this.cells[i + d * this.w] === EMPTY) {
-          this.moveTo(i, i + d * this.w)
-          return true
+        if (ay > 0.02 && ny >= 0 && ny < this.h) {
+          const t = this.cells[i + d * this.w]
+          if (t === EMPTY) {
+            this.moveTo(i, i + d * this.w)
+            return true
+          }
+          if (!selfGas && (t === STEAM || t === SMOKE)) {
+            this.swap(i, i + d * this.w)
+            return true
+          }
         }
       }
     }
@@ -474,14 +514,39 @@ export class World {
       this.swap(i, below) // sink
       return
     }
+    // On ice, friction vanishes (R32): a grain skates SIDEWAYS along the
+    // sheet, fast — diagonal slides can't fire on a flat floor, so this is
+    // the move that keeps powder from piling on a rink.
+    if (b === ICE) {
+      const sl = x > 0 && this.cells[i - 1] === EMPTY
+      const sr = x + 1 < this.w && this.cells[i + 1] === EMPTY
+      if (sl || sr) {
+        const d = sl && sr ? this.rng.sign() : sl ? -1 : 1
+        let dest = i + d
+        const x2 = x + d * 2
+        if (x2 >= 0 && x2 < this.w && this.cells[i + d * 2] === EMPTY) dest = i + d * 2
+        this.moveTo(i, dest)
+        return
+      }
+    }
     // Slide, with friction: a grain on a steep ledge only topples sometimes,
     // so piles come out textured and varied instead of relaxing instantly
     // into identical razor-edged 45° pyramids. Openness is checked before any
-    // draw, so grains inside a settled pile still cost zero PRNG.
+    // draw, so grains inside a settled pile still cost zero PRNG. Slipperiness
+    // reaches one layer up: sand resting on sand-on-ice slides without grip.
     const le = x > 0 && this.cells[below - 1] === EMPTY
     const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
     if (!le && !re) return
-    if (!this.rng.chance(0.5)) return
+    // Slick reaches down through shallow sand: a grain whose support column
+    // stands on ice (within two layers) has nothing to grip.
+    let slick = false
+    if (b === SAND && y + 2 < this.h) {
+      const b2 = this.cells[below + this.w]
+      slick =
+        b2 === ICE ||
+        (b2 === SAND && y + 3 < this.h && this.cells[below + this.w * 2] === ICE)
+    }
+    if (!slick && !this.rng.chance(0.5)) return
     const d = le && re ? this.rng.sign() : le ? -1 : 1
     this.moveTo(i, below + d)
   }
@@ -596,8 +661,8 @@ export class World {
     }
     const life = this.meta[i]
     if (life <= 1) {
-      // Fire's receipt: much of it becomes smoke; the rest just goes out.
-      if (this.rng.chance(0.35)) {
+      // Fire's receipt: some becomes smoke; most just goes out.
+      if (this.rng.chance(0.125)) {
         cells[i] = SMOKE
         this.meta[i] = 80 + this.rng.int(70)
         this.updated[i] = 1
@@ -634,13 +699,15 @@ export class World {
 
   private updateSteam(x: number, y: number, i: number): void {
     if (this.windPush(x, y, i, WINDAGE[STEAM])) return
-    // Condensation: steam touching glass beads into water on the pane.
+    // Condensation: steam touching glass or ice beads into water.
     const { w: ww, cells: cc } = this
+    const l = x > 0 ? cc[i - 1] : 0
+    const r = x + 1 < ww ? cc[i + 1] : 0
+    const u = y > 0 ? cc[i - ww] : 0
+    const dn = y + 1 < this.h ? cc[i + ww] : 0
     if (
-      ((x > 0 && cc[i - 1] === GLASS) ||
-        (x + 1 < ww && cc[i + 1] === GLASS) ||
-        (y > 0 && cc[i - ww] === GLASS) ||
-        (y + 1 < this.h && cc[i + ww] === GLASS)) &&
+      (l === GLASS || l === ICE || r === GLASS || r === ICE ||
+        u === GLASS || u === ICE || dn === GLASS || dn === ICE) &&
       this.rng.chance(0.12)
     ) {
       cc[i] = WATER
@@ -1039,6 +1106,196 @@ export class World {
     if (!this.rng.chance(0.05)) return
     const d = le && re ? this.rng.sign() : le ? -1 : 1
     this.moveTo(i, below + d)
+  }
+
+  /**
+   * Timber. Catches slowly (hold a flame to it), then burns IN PLACE — the
+   * structure keeps its shape while flames dance on it — and finally
+   * crumbles, part ash-dust, part nothing. Water douses a burning log.
+   * meta is the burn clock: 0 = sound wood, >0 = burning.
+   */
+  private updateWood(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    let fireNear = false
+    let waterNear = false
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j < 0) continue
+      if (cells[j] === FIRE || cells[j] === LAVA) fireNear = true
+      else if (cells[j] === WATER) waterNear = true
+    }
+    const burning = this.meta[i] > 0
+    if (!burning) {
+      if (fireNear && this.rng.chance(0.06)) this.meta[i] = 1 // caught
+      return
+    }
+    if (waterNear) {
+      this.meta[i] = 0 // doused — the char survives
+      return
+    }
+    this.meta[i]++
+    if (this.meta[i] > 70) {
+      // Burnt through: everything returns to dust (some of it, anyway).
+      if (this.rng.chance(0.35)) {
+        cells[i] = DUST
+        this.meta[i] = 0
+      } else {
+        cells[i] = EMPTY
+        this.meta[i] = 0
+        this.shade[i] = 0
+        this.count--
+      }
+      this.updated[i] = 1
+      return
+    }
+    // Flames lick off the burning log into open neighbors.
+    if (this.rng.chance(0.35) && this.count < this.budget) {
+      const d = this.rng.int(4)
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j >= 0 && cells[j] === EMPTY) {
+        this.write(j, FIRE)
+        this.meta[j] = 10 + this.rng.int(14)
+        this.count++
+        this.updated[j] = 1
+      }
+    }
+  }
+
+  /**
+   * Falls, rolls, waits for wet ground. On mud — or on sand with water at
+   * hand — it sprouts into plant. Pops into flame near fire or lava.
+   */
+  private updateSeed(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    const hotNear =
+      (x > 0 && (cells[i - 1] === FIRE || cells[i - 1] === LAVA)) ||
+      (x + 1 < w && (cells[i + 1] === FIRE || cells[i + 1] === LAVA)) ||
+      (y > 0 && (cells[i - w] === FIRE || cells[i - w] === LAVA)) ||
+      (y + 1 < this.h && (cells[i + w] === FIRE || cells[i + w] === LAVA))
+    if (hotNear && this.rng.chance(0.5)) {
+      cells[i] = FIRE // pop!
+      this.meta[i] = 12 + this.rng.int(12)
+      this.updated[i] = 1
+      return
+    }
+    if (this.windPush(x, y, i, WINDAGE[SEED])) return
+    if (y + 1 >= this.h) return
+    const below = i + w
+    const b = cells[below]
+    if (b === EMPTY) {
+      this.moveTo(i, below)
+      return
+    }
+    if ((b === STEAM || b === SMOKE) && this.rng.chance(0.6)) {
+      this.swap(i, below)
+      return
+    }
+    if (b === WATER) {
+      if (this.rng.chance(0.15)) this.swap(i, below) // drifts down through ponds
+      return
+    }
+    // Sprout: mud is a seedbed; sand will do if water is within reach.
+    if (b === MUD && this.rng.chance(0.02)) {
+      cells[i] = PLANT
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
+    if (b === SAND || b === DUST) {
+      const wet =
+        (x > 0 && cells[i - 1] === WATER) ||
+        (x + 1 < w && cells[i + 1] === WATER) ||
+        (y > 0 && cells[i - w] === WATER)
+      if (wet && this.rng.chance(0.02)) {
+        cells[i] = PLANT
+        this.meta[i] = 0
+        this.updated[i] = 1
+        return
+      }
+    }
+    // Round little things roll off ledges (and skitter on ice).
+    const le = x > 0 && cells[below - 1] === EMPTY
+    const re = x + 1 < w && cells[below + 1] === EMPTY
+    if (!le && !re) return
+    if (b !== ICE && !this.rng.chance(0.4)) return
+    const d = le && re ? this.rng.sign() : le ? -1 : 1
+    this.moveTo(i, below + d)
+  }
+
+  /**
+   * Living green. Grows INTO adjacent water, one cell at a time — ponds
+   * become gardens, PG-vine style. Burns eagerly.
+   */
+  private updatePlant(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j < 0) continue
+      const n = cells[j]
+      if ((n === FIRE || n === LAVA) && this.rng.chance(0.35)) {
+        cells[i] = FIRE
+        this.meta[i] = 14 + this.rng.int(14)
+        this.updated[i] = 1
+        return
+      }
+      if (n === WATER && this.rng.chance(0.08)) {
+        cells[j] = PLANT // drink and grow
+        this.meta[j] = 0
+        this.updated[j] = 1
+        return
+      }
+    }
+  }
+
+  /**
+   * Patient and expansionist: spreads freezing into touching water, so a
+   * crystal seeds a glacier. Melts near heat; lava and ice both pay (R3).
+   * Its surface is frictionless — powders skitter off instead of piling.
+   */
+  private updateIce(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    for (let d = 0; d < 4; d++) {
+      const j =
+        d === 0 ? (x > 0 ? i - 1 : -1)
+        : d === 1 ? (x + 1 < w ? i + 1 : -1)
+        : d === 2 ? (y > 0 ? i - w : -1)
+        : y + 1 < this.h ? i + w : -1
+      if (j < 0) continue
+      const n = cells[j]
+      if (n === LAVA && this.rng.chance(0.4)) {
+        cells[i] = WATER // both sides pay: ice melts…
+        this.meta[i] = this.rng.next() & 1
+        this.updated[i] = 1
+        cells[j] = STONE // …and the lava freezes
+        this.meta[j] = 0
+        this.updated[j] = 1
+        return
+      }
+      if (n === FIRE && this.rng.chance(0.08)) {
+        cells[i] = WATER
+        this.meta[i] = this.rng.next() & 1
+        this.updated[i] = 1
+        return
+      }
+      if (n === WATER && this.rng.chance(0.012)) {
+        cells[j] = ICE // the glacier creeps
+        this.meta[j] = 0
+        this.updated[j] = 1
+        return
+      }
+    }
   }
 
   // ---- inspection (tests, HUD) ------------------------------------------

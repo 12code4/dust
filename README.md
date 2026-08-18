@@ -17,8 +17,18 @@ part — rediscoverable by the player as an in-game codex.
 
 ## Status
 
-🏗️ **M1a: the Hot pack** — eleven elements: wall, sand, dust, stone, water, mud,
-**lava**, fire, smoke, steam, **glass**. Lava is the terrain printer: water quenches it to
+🏗️ **M1c: the Life pack + ice** — fifteen elements: wall, sand, dust, stone, water, mud,
+lava, fire, smoke, steam, glass, **wood**, **seed**, **plant**, **ice**. Wood catches
+slowly, burns in place while flames lick off it, crumbles to ash-dust, and a splash of
+water douses it. Seeds fall, roll, drift through ponds, and sprout on mud or wet sand;
+plants drink adjacent water and grow into it cell by cell, so ponds become gardens —
+until fire finds them. Ice spreads freezing through touching water (a crystal seeds a
+glacier), melts near heat, trades with lava (ice→water, lava→stone), beads steam into
+droplets, and is frictionless — sand skates off it into wide drifts. The drag tool now
+grabs a persistent handful at click, holds it against gravity, and throws it with your
+hand speed; there's a sim-speed stepper (⅛×–8×), and the wind tool blows a hard-cored
+gust that genuinely streams particles. Earlier: M1a's Hot pack (lava/stone/glass + the
+CI completeness gate), the Namesake (M2). Lava is the terrain printer: water quenches it to
 stone (plus steam), sand vitrifies to glass against it, mud kiln-fires to stone, dust
 ignites, and pools slowly crust over. Stone builds cliffs (falls straight, never slides),
 melts back in lava, erodes to sand under water, and a hard ballistic landing smashes it to
