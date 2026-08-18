@@ -121,8 +121,8 @@ export class World {
     this.impX[i] = 0
     this.impY[i] = 0
     if (el === FIRE) this.meta[i] = 24 + this.rng.int(48)
-    else if (el === STEAM) this.meta[i] = 100 + this.rng.int(140)
-    else if (el === SMOKE) this.meta[i] = 150 + this.rng.int(100)
+    else if (el === STEAM) this.meta[i] = 60 + this.rng.int(60)
+    else if (el === SMOKE) this.meta[i] = 80 + this.rng.int(70)
     else if (el === WATER) this.meta[i] = this.rng.next() & 1
     else this.meta[i] = 0
   }
@@ -437,6 +437,20 @@ export class World {
       this.updated[i] = 1
       return
     }
+    // Smother (the R6 classic): sand starves a flame and takes its cell.
+    if (b === FIRE && this.rng.chance(0.85)) {
+      this.cells[below] = EMPTY
+      this.meta[below] = 0
+      this.shade[below] = 0
+      this.count--
+      this.moveTo(i, below)
+      return
+    }
+    // Gases don't hold sand up — it falls through, and they bubble around it.
+    if ((b === STEAM || b === SMOKE) && this.rng.chance(0.9)) {
+      this.swap(i, below)
+      return
+    }
     if (b === EMPTY) {
       // A pinch of wobble, but only in TRUE freefall (two clear cells below):
       // a grain skimming a pile face has one empty below and must not jitter
@@ -496,6 +510,12 @@ export class World {
       return
     }
     if (y + 1 < this.h) {
+      const b = this.cells[below]
+      // Rain falls through cloud: gases yield and bubble up past the drop.
+      if ((b === STEAM || b === SMOKE) && this.rng.chance(0.85)) {
+        this.swap(i, below)
+        return
+      }
       const le = x > 0 && this.cells[below - 1] === EMPTY
       const re = x + 1 < this.w && this.cells[below + 1] === EMPTY
       if (le || re) {
@@ -579,7 +599,7 @@ export class World {
       // Fire's receipt: much of it becomes smoke; the rest just goes out.
       if (this.rng.chance(0.35)) {
         cells[i] = SMOKE
-        this.meta[i] = 150 + this.rng.int(100)
+        this.meta[i] = 80 + this.rng.int(70)
         this.updated[i] = 1
       } else {
         cells[i] = EMPTY
@@ -628,12 +648,25 @@ export class World {
       this.updated[i] = 1
       return
     }
+    // Bubbles: steam under water rises straight up through the pool.
+    if (y > 0 && cc[i - ww] === WATER && this.rng.chance(0.35)) {
+      this.swap(i, i - ww)
+      return
+    }
     const life = this.meta[i]
     if (life <= 1) {
-      this.cells[i] = EMPTY
-      this.meta[i] = 0
-      this.shade[i] = 0
-      this.count--
+      // End of life: some condenses and falls as rain (R27 — weather is the
+      // fire brigade, and rain settles airborne dust); the rest dissipates.
+      if (this.rng.chance(0.35)) {
+        this.cells[i] = WATER
+        this.meta[i] = this.rng.next() & 1
+        this.updated[i] = 1
+      } else {
+        this.cells[i] = EMPTY
+        this.meta[i] = 0
+        this.shade[i] = 0
+        this.count--
+      }
       return
     }
     this.meta[i] = life - 1
@@ -735,6 +768,10 @@ export class World {
       }
       return
     }
+    if ((b === STEAM || b === SMOKE) && this.rng.chance(0.7)) {
+      this.swap(i, below) // even dust settles through a plume, slowly
+      return
+    }
     // Slides eagerly — drifts smooth themselves out.
     const le = x > 0 && cells[below - 1] === EMPTY
     const re = x + 1 < w && cells[below + 1] === EMPTY
@@ -767,10 +804,15 @@ export class World {
 
   private updateSmoke(x: number, y: number, i: number): void {
     if (this.windPush(x, y, i, WINDAGE[SMOKE])) return
+    // Bubbles: smoke under water rises through the pool, not around it.
+    if (y > 0 && this.cells[i - this.w] === WATER && this.rng.chance(0.3)) {
+      this.swap(i, i - this.w)
+      return
+    }
     const life = this.meta[i]
     if (life <= 1) {
       // Soot: a little of every plume comes back down as the namesake.
-      if (this.rng.chance(0.02)) {
+      if (this.rng.chance(0.03)) {
         this.cells[i] = DUST
         this.meta[i] = 0
         this.updated[i] = 1
@@ -816,7 +858,7 @@ export class World {
         : y + 1 < this.h ? i + w : -1
       if (j >= 0 && cells[j] === WATER && this.rng.chance(0.85)) {
         cells[j] = STEAM
-        this.meta[j] = 100 + this.rng.int(140)
+        this.meta[j] = 60 + this.rng.int(60)
         this.updated[j] = 1
         cells[i] = STONE
         this.meta[i] = 0
@@ -826,9 +868,9 @@ export class World {
     }
     // Heat: gentler than open flame, but constant.
     this.wind.perturb(x, y, (this.rng.int(21) - 10) * 0.001, -(5 + this.rng.int(16)) * 0.001)
-    if (this.rng.chance(0.02) && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
+    if (this.rng.chance(0.004) && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
       this.write(i - w, FIRE)
-      this.meta[i - w] = 8 + this.rng.int(10) // brief tongues of flame
+      this.meta[i - w] = 8 + this.rng.int(10) // occasional tongue of flame
       this.count++
       this.updated[i - w] = 1
     }
@@ -843,6 +885,14 @@ export class World {
     const below = i + w
     if (y + 1 < this.h && cells[below] === EMPTY) {
       this.moveTo(i, below)
+      return
+    }
+    if (
+      y + 1 < this.h &&
+      (cells[below] === STEAM || cells[below] === SMOKE) &&
+      this.rng.chance(0.8)
+    ) {
+      this.swap(i, below)
       return
     }
     if (y + 1 < this.h) {
@@ -903,6 +953,10 @@ export class World {
     }
     if (b === LAVA && this.rng.chance(0.25)) {
       this.swap(i, below) // submerges into the melt that is consuming it
+      return
+    }
+    if ((b === STEAM || b === SMOKE || b === FIRE) && this.rng.chance(0.9)) {
+      this.swap(i, below) // a boulder does not negotiate with vapors
     }
   }
 
@@ -912,9 +966,22 @@ export class World {
    * sign) shatters it back to the sand it came from.
    */
   private updateGlass(x: number, y: number, i: number): void {
+    const { w, cells } = this
+    // Lava un-makes what it made: glass softens back into the melt.
+    const nearLava =
+      (x > 0 && cells[i - 1] === LAVA) ||
+      (x + 1 < w && cells[i + 1] === LAVA) ||
+      (y > 0 && cells[i - w] === LAVA) ||
+      (y + 1 < this.h && cells[i + w] === LAVA)
+    if (nearLava && this.rng.chance(0.008)) {
+      cells[i] = LAVA
+      this.meta[i] = 0
+      this.updated[i] = 1
+      return
+    }
     const p = this.wind.p[this.wind.cellIndex(x, y)]
     if ((p > 2.8 || p < -2.8) && this.rng.chance(0.5)) {
-      this.cells[i] = SAND
+      cells[i] = SAND
       this.meta[i] = 0
       this.updated[i] = 1
     }
@@ -959,6 +1026,10 @@ export class World {
     }
     if (b === WATER && this.rng.chance(0.4)) {
       this.swap(i, below) // sinks
+      return
+    }
+    if ((b === STEAM || b === SMOKE) && this.rng.chance(0.9)) {
+      this.swap(i, below) // falls through gas
       return
     }
     // Barely slides: mud holds steep, lumpy shapes.

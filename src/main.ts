@@ -135,8 +135,10 @@ function canvasPos(e: PointerEvent): [number, number] {
 const windInput = {
   active: false,
   mode: 'blow' as 'blow' | 'suck',
-  dirX: 0, // unit-ish aim from recent motion; zero until the first movement
+  dirX: 0, // unit aim from smoothed recent motion; zero until first movement
   dirY: 0,
+  emaX: 0, // motion EMA — raw per-event deltas are 1–2 cell steps that
+  emaY: 0, // quantize to 8 directions; smoothing preserves fine angles
   curX: 0,
   curY: 0,
 }
@@ -255,6 +257,8 @@ canvas.addEventListener('pointerdown', (e) => {
     windInput.mode = e.button === 2 ? 'suck' : 'blow'
     windInput.dirX = 0
     windInput.dirY = 0
+    windInput.emaX = 0
+    windInput.emaY = 0
     windInput.curX = x
     windInput.curY = y
     return
@@ -281,10 +285,14 @@ canvas.addEventListener('pointermove', (e) => {
   if (windInput.active) {
     const dx = x - windInput.curX
     const dy = y - windInput.curY
-    const len = Math.hypot(dx, dy)
-    if (len > 0.5) {
-      windInput.dirX = dx / len
-      windInput.dirY = dy / len
+    if (dx !== 0 || dy !== 0) {
+      windInput.emaX = windInput.emaX * 0.65 + dx * 0.35
+      windInput.emaY = windInput.emaY * 0.65 + dy * 0.35
+      const len = Math.hypot(windInput.emaX, windInput.emaY)
+      if (len > 0.2) {
+        windInput.dirX = windInput.emaX / len
+        windInput.dirY = windInput.emaY / len
+      }
     }
     windInput.curX = x
     windInput.curY = y

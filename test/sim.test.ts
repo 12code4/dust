@@ -83,8 +83,10 @@ describe('fire and steam', () => {
     expect(w.countOf(FIRE)).toBeGreaterThan(0)
     for (let t = 0; t < 200; t++) w.step()
     expect(w.countOf(FIRE)).toBe(0)
-    // What remains is exhaust: steam, smoke, and settled soot-dust.
-    expect(w.count).toBe(w.countOf(STEAM) + w.countOf(SMOKE) + w.countOf(DUST))
+    // What remains is exhaust: steam, smoke, soot-dust, and condensed rain.
+    expect(w.count).toBe(
+      w.countOf(STEAM) + w.countOf(SMOKE) + w.countOf(DUST) + w.countOf(WATER),
+    )
   })
 
   it('is quenched by water into steam', () => {
@@ -97,11 +99,12 @@ describe('fire and steam', () => {
     expect(w.countOf(STEAM)).toBe(20)
   })
 
-  it('steam eventually dissipates', () => {
+  it('steam eventually dissipates or falls back as rain', () => {
     const w = new World(20, 20, 42)
     w.paintDisk(10, 15, 3, STEAM)
     for (let t = 0; t < 300; t++) w.step()
-    expect(w.count).toBe(0)
+    expect(w.countOf(STEAM)).toBe(0)
+    expect(w.count).toBe(w.countOf(WATER)) // whatever remains is rainfall
   })
 })
 

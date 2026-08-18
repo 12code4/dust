@@ -150,6 +150,37 @@ const PAIR_PROBES: Record<string, Probe> = {
     }
     expect(melted).toBe(true)
   },
+  [key(LAVA, GLASS)]: () => {
+    // Isolated specimen, same scheme as lava+stone: the glass cell can only
+    // ever read LAVA via the melt.
+    const w = new World(5, 6, 7)
+    for (let x = 0; x < 5; x++) w.set(x, 4, WALL)
+    w.set(0, 3, WALL)
+    w.set(4, 3, WALL)
+    w.set(2, 3, GLASS)
+    w.set(1, 3, LAVA)
+    w.set(3, 3, LAVA)
+    w.set(2, 2, LAVA)
+    let melted = false
+    for (let t = 0; t < 900 && !melted; t++) {
+      w.step()
+      if (w.get(2, 3) === LAVA) melted = true
+    }
+    expect(melted).toBe(true)
+  },
+  [key(SAND, FIRE)]: () => {
+    // Torch row buried under a sand pour: every covered flame dies at once
+    // (natural life runs to 71 ticks, so survivors at t=45 would prove the
+    // smother missing) and the sand lands on the floor it cleared.
+    const w = new World(10, 30, 21)
+    for (let x = 0; x < 10; x++) w.set(x, 29, FIRE)
+    for (let x = 0; x < 10; x++) for (let y = 4; y < 8; y++) w.set(x, y, SAND)
+    for (let t = 0; t < 45; t++) w.step()
+    expect(w.countOf(FIRE)).toBe(0)
+    let sandOnFloor = 0
+    for (let x = 0; x < 10; x++) if (w.get(x, 29) === SAND) sandOnFloor++
+    expect(sandOnFloor).toBeGreaterThan(5)
+  },
   [key(STEAM, GLASS)]: () => {
     const w = new World(20, 30, 7)
     for (let x = 0; x < 20; x++) w.set(x, 10, GLASS) // a pane over a boiler
@@ -172,7 +203,7 @@ const UNARY_PROBES: Record<number, Probe> = {
   },
   [SMOKE]: () => {
     const w = new World(30, 40, 11)
-    for (let t = 0; t < 40; t++) {
+    for (let t = 0; t < 120; t++) {
       w.paintDisk(15, 35, 5, FIRE, 0.5)
       w.step()
     }
@@ -184,7 +215,8 @@ const UNARY_PROBES: Record<number, Probe> = {
     const w = new World(20, 20, 5)
     w.paintDisk(10, 15, 3, STEAM)
     for (let t = 0; t < 400; t++) w.step()
-    expect(w.countOf(STEAM)).toBe(0) // condensed (fell as water) or dissipated
+    expect(w.countOf(STEAM)).toBe(0)
+    expect(w.countOf(WATER)).toBeGreaterThan(0) // some of it rained back
   },
   [LAVA]: () => {
     const w = new World(30, 30, 5)

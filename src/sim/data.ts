@@ -68,6 +68,8 @@ export const INTERACTIONS: readonly Interaction[] = [
   { a: LAVA, b: MUD, effect: 'bakes → stone' },
   { a: LAVA, b: DUST, effect: 'ignites (as fire does)' },
   { a: LAVA, b: STONE, effect: 'melts → lava (slow); stone sinks in' },
+  { a: LAVA, b: GLASS, effect: 'softens back into the melt (slow)' },
+  { a: SAND, b: FIRE, effect: 'smothers the flame' },
   { a: STEAM, b: GLASS, effect: 'condenses → water on the pane' },
 ]
 

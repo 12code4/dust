@@ -73,7 +73,7 @@ meet." Details and rates live in the registry (§4).
 | **Wt** Water | · | · | rust | frz | · | grow | →Md | →Md | ruin | →Br | spr | ero |
 | **Br** Brine | · | · | rust+ | melt | · | wthr | →Md | →Md | ruin | · | wthr | ero |
 | **Ol** Oil | · | · | · | · | · | · | ρ | ρ | ρ | ρ | ρ | ρ |
-| **Lv** Lava | · | ign | imm | →Wt+Sn | imm | ign | →Gl | flash | boom | · | ign | melt |
+| **Lv** Lava | · | ign | imm | →Wt+Sn | melt | ign | →Gl | flash | boom | · | ign | melt |
 | **Ac** Acid | imm | diss | diss | diss | imm | diss | diss | diss | diss | diss | diss | diss |
 | **Sm** Steam | · | · | · | cnd | cnd | · | · | · | ruin | · | · | · |
 | **Sk** Smoke | · | · | · | · | · | · | · | · | · | · | · | · |
@@ -90,7 +90,7 @@ meet." Details and rates live in the registry (§4).
 | **Wd** Wood | · | · | · | · | ign | diss | · | · | ign | · | copy | del |
 | **Mt** Metal | · | rust | rust+ | · | imm | diss | · | · | · | cond | copy | del |
 | **Ic** Ice | · | frz | melt | · | →Wt+Sn | diss | cnd | · | melt | · | copy | del |
-| **Gl** Glass | · | · | · | · | imm | imm | cnd | · | · | · | copy | del |
+| **Gl** Glass | · | · | · | · | melt | imm | cnd | · | · | · | copy | del |
 | **Pl** Plant | · | grow | wthr | · | ign | diss | · | · | ign | · | copy | del |
 | **Sa** Sand | · | →Md | →Md | ρ | →Gl | diss | · | · | ext | · | copy | del |
 | **Du** Dust | · | →Md | →Md | ρ | flash | diss | · | · | flash | flash | copy | del |
@@ -196,8 +196,9 @@ to the newcomer. The discipline Powder Game's community kept in a wiki, we keep 
 
 - **Metal vs. Lava — nothing.** Metal survives lava so machine-builders can pipe it. Its
   weakness is chemistry (water, brine, acid), not heat. A trade of realism for buildability.
-- **Glass vs. Acid & Lava — nothing.** The only honest container for both. Homage to PG's
-  acid immunities (clone, glass, fan).
+- **Glass vs. Acid — nothing.** Acid's honest container, homage to PG's acid immunities
+  (clone, glass, fan). Lava, however, un-makes what it made: glass softens slowly back
+  into the melt (changed from the original "lava-proof" spec during M1a playtesting).
 - **Oil vs. Acid — nothing, and it floats.** Oil is the lid for your acid vat.
 - **Wall vs. everything — nothing.** The referee never plays.
 - **Salt vs. Lava — nothing.** (Molten salt is real, but one liquid per pun is our limit.)

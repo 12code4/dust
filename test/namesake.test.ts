@@ -60,7 +60,7 @@ describe('dust, the namesake', () => {
 
   it('fire exhales smoke, and smoke settles into soot-dust', () => {
     const w = new World(40, 60, 11)
-    for (let t = 0; t < 40; t++) {
+    for (let t = 0; t < 120; t++) {
       w.paintDisk(20, 50, 5, FIRE, 0.5)
       w.step()
     }
