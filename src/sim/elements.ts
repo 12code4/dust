@@ -58,13 +58,13 @@ export const WINDAGE: readonly number[] = [
   0, // EMPTY
   0, // WALL
   0.3, // SAND
-  0.15, // WATER
+  0.35, // WATER — strong gusts tear spray off a stream
   0.7, // FIRE
   0.9, // STEAM
   1.0, // DUST — the namesake rides every draft
   0.85, // SMOKE
   0.05, // MUD — sticky, nearly windproof
-  0.02, // LAVA — molten rock ignores weather
+  0.12, // LAVA — heavy, but a gale spatters it
   0.02, // STONE
   0, // GLASS — static
   0, // WOOD — static
@@ -72,7 +72,7 @@ export const WINDAGE: readonly number[] = [
   0, // VINE — static
   0, // ICE — static
   0.3, // GUNPOWDER
-  0.15, // OIL
+  0.3, // OIL
 ]
 
 /**

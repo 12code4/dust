@@ -116,6 +116,7 @@ export const UNARY: readonly { el: number; effect: string }[] = [
   { el: STEAM, effect: 'condenses to water at end of life' },
   { el: LAVA, effect: 'crusts to stone at a trace rate' },
   { el: STONE, effect: 'smashes to sand on hard ballistic landing' },
+  { el: WOOD, effect: 'living tips grow in slow cycles, fork branches, and shed seeds' },
 ]
 
 /** Elements the UI can place; the matrix test checks props exist for all. */

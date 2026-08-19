@@ -271,14 +271,49 @@ export class World {
   }
 
   /**
+   * Explosion mechanics: a hard pressure spike plus a radial ballistic shove —
+   * every mover in range is flung away from the center, fading with distance.
+   * Statics (wall/glass/wood/vine/ice) hold their ground; the pressure wave
+   * handles them (glass shatters past its threshold).
+   */
+  private blast(cx: number, cy: number, radius: number, power: number): void {
+    this.wind.addPressure(cx, cy, 4, 12)
+    const r2 = radius * radius
+    for (let dy = -radius; dy <= radius; dy++) {
+      const y = cy + dy
+      if (y < 0 || y >= this.h) continue
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx === 0 && dy === 0) continue
+        const x = cx + dx
+        if (x < 0 || x >= this.w) continue
+        const d2 = dx * dx + dy * dy
+        if (d2 > r2) continue
+        const i = y * this.w + x
+        const el = this.cells[i]
+        if (
+          el === EMPTY || el === WALL || el === GLASS || el === WOOD ||
+          el === VINE || el === ICE
+        )
+          continue
+        const d = Math.sqrt(d2)
+        const f = (power * (1 - d / (radius + 1))) / d
+        const qvx = Math.round(dx * f) + this.impX[i]
+        const qvy = Math.round(dy * f) + this.impY[i]
+        this.impX[i] = qvx > 31 ? 31 : qvx < -31 ? -31 : qvx
+        this.impY[i] = qvy > 31 ? 31 : qvy < -31 ? -31 : qvy
+      }
+    }
+  }
+
+  /**
    * Pen-fire lifespan: ~1.5s assured, then 33% extinction rolls per 0.5s.
    * Reaction flames (wood licks, lava tongues, pops, blast fronts) use their
    * own brief lives — they render pure ember-red, while this long life walks
    * the full red/orange/yellow mix.
    */
   private fireLife(): number {
-    let life = 90
-    while (life < 240 && this.rng.chance(0.67)) life += 30
+    let life = 45
+    while (life < 165 && this.rng.chance(0.67)) life += 30
     return life
   }
 
@@ -1167,7 +1202,56 @@ export class World {
       if (cells[j] === FIRE || cells[j] === LAVA) fireNear = true
       else if (cells[j] === WATER) waterNear = true
     }
-    const burning = this.meta[i] > 0
+    const m = this.meta[i]
+    // meta ≥ 128: a living growth tip (budget = meta − 128). It grows in
+    // slow cycles — a spurt, then a pause — occasionally forks a branch, and
+    // now and then sheds a seed from the tip (one spawned under an overhang
+    // simply flutters down).
+    if (m >= 128) {
+      if (fireNear && this.rng.chance(0.06)) {
+        this.meta[i] = 1 // the living tip catches like any wood
+        return
+      }
+      const budget = m - 128
+      if (budget > 0 && this.rng.chance(0.008)) {
+        const gy = y - 1
+        if (gy >= 0 && cells[i - w] === EMPTY && this.count < this.budget) {
+          this.write(i - w, WOOD)
+          this.meta[i - w] = 128 + budget - 1 // the tip moves up
+          this.count++
+          this.updated[i - w] = 1
+          this.meta[i] = 0 // this cell matures into plain trunk
+          // Branch fork: sometimes the trunk splits sideways too.
+          if (budget >= 3 && this.rng.chance(0.25)) {
+            const bd = this.rng.sign()
+            const bx = x + bd
+            if (bx >= 0 && bx < w && cells[i + bd] === EMPTY && this.count < this.budget) {
+              this.write(i + bd, WOOD)
+              this.meta[i + bd] = 128 + (budget >> 1)
+              this.count++
+              this.updated[i + bd] = 1
+            }
+          }
+          return
+        }
+      }
+      // Seed shedding, near the tips only, rare.
+      if (this.rng.chance(0.002) && this.count < this.budget) {
+        const d = this.rng.int(4)
+        const j =
+          d === 0 ? (x > 0 ? i - 1 : -1)
+          : d === 1 ? (x + 1 < w ? i + 1 : -1)
+          : d === 2 ? (y > 0 ? i - w : -1)
+          : y + 1 < this.h ? i + w : -1
+        if (j >= 0 && cells[j] === EMPTY) {
+          this.write(j, SEED)
+          this.count++
+          this.updated[j] = 1
+        }
+      }
+      return
+    }
+    const burning = m > 0
     if (!burning) {
       if (fireNear && this.rng.chance(0.06)) this.meta[i] = 1 // caught
       return
@@ -1228,17 +1312,20 @@ export class World {
     // A sprouted seed climbs its own trunk: it converts to wood and re-seeds
     // itself one cell up, meta counting the height left to grow — a sapling
     // rising in real time.
-    if (this.meta[i] > 0 && y + 1 < this.h && cells[i + w] === WOOD) {
+    if (this.meta[i] > 0 && this.meta[i] < 128 && y + 1 < this.h && cells[i + w] === WOOD) {
       if (!this.rng.chance(0.12)) return
       const h = this.meta[i]
       cells[i] = WOOD
-      this.meta[i] = 0
       this.updated[i] = 1
       if (h > 1 && y > 0 && cells[i - w] === EMPTY && this.count < this.budget) {
+        this.meta[i] = 0
         this.write(i - w, SEED)
         this.meta[i - w] = h - 1
         this.count++
         this.updated[i - w] = 1
+      } else {
+        // Trunk complete: the crown stays alive as a growth tip.
+        this.meta[i] = 128 + 4 + this.rng.int(5)
       }
       return
     }
@@ -1425,11 +1512,17 @@ export class World {
       if (n === FIRE || n === LAVA) hot = true
       else if (n === WATER || n === STEAM) wet = true
     }
-    if (hot) {
+    // Shock-sensitive: the pressure wave of a nearby blast sets grains off
+    // even as they're being flung — that's how the chain outruns the scatter.
+    // (Threshold sits above anything a gale can build, below a blast's spike.)
+    const shocked = this.wind.p[this.wind.cellIndex(x, y)] > 2.2
+    if ((hot || shocked) && this.rng.chance(0.55)) {
+      // Paced but lightning: each grain rolls per tick, so the detonation
+      // races through a pile as a visible front instead of one flat flash.
       cells[i] = FIRE
       this.meta[i] = 8 + this.rng.int(8) // blast front, not a campfire
       this.updated[i] = 1
-      this.wind.addPressure(x, y, 4, 12)
+      this.blast(x, y, 9, 18)
       return
     }
     if (wet && this.rng.chance(0.25)) {

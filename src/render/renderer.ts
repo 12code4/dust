@@ -46,9 +46,9 @@ export class Renderer {
     for (let i = 0; i < cells.length; i++) {
       const el = cells[i]
       // Fire renders by remaining lifetime (white-hot birth → red embers).
-      // Lives run 90–240, so >>6 spreads fresh flame across the red/orange/
-      // yellow mix and saves pure ember-red for the fade.
-      const s = el === FIRE ? Math.min(3, meta[i] >> 6) : shade[i]
+      // Pen fire lives 45–165, so >>5 walks it through the red/orange/yellow
+      // mix; brief reaction flames (<32) stay pure ember-red.
+      const s = el === FIRE ? Math.min(3, meta[i] >> 5) : shade[i]
       pixels[i] = palette[el * 4 + s]
     }
     this.ctx.putImageData(this.image, 0, 0)

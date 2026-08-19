@@ -512,6 +512,22 @@ const UNARY_PROBES: Record<number, Probe> = {
     expect(w.countOf(SAND)).toBe(1) // smashed on landing
     expect(w.countOf(STONE)).toBe(0)
   },
+[WOOD]: () => {
+    // A living tip grows in spurts (and branches), and sheds the odd seed.
+    const w = new World(20, 40, 33)
+    for (let y = 32; y < 40; y++) w.set(10, y, WOOD)
+    w.meta[31 * 20 + 10] = 0
+    w.set(10, 31, WOOD)
+    w.meta[31 * 20 + 10] = 128 + 8 // a live crown
+    const wood0 = w.countOf(WOOD)
+    let sawSeed = false
+    for (let t = 0; t < 2500; t++) {
+      w.step()
+      if (w.countOf(SEED) > 0) sawSeed = true
+    }
+    expect(w.countOf(WOOD)).toBeGreaterThan(wood0) // it grew
+    expect(sawSeed).toBe(true) // and seeded
+  },
 }
 
 describe('pair probes (every special reaction observably fires)', () => {

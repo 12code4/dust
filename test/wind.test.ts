@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { World } from '../src/sim/world.ts'
 import { Wind } from '../src/sim/wind.ts'
-import { WALL, SAND, WATER, FIRE, STEAM } from '../src/sim/elements.ts'
+import { WALL, SAND, WATER, MUD, FIRE, STEAM } from '../src/sim/elements.ts'
 
 function centroidX(w: World, el: number): number {
   let sum = 0
@@ -149,6 +149,22 @@ describe('wind on particles', () => {
       for (let x = 34; x < 80; x++) if (w.get(x, y) === SAND) displaced++
     expect(displaced).toBeGreaterThan(10) // grains blown well past the pile
     expect(w.countOf(SAND)).toBe(160)
+  })
+
+  it('a gale tears spray off a pond', () => {
+    const w = new World(120, 60, 9)
+    for (let x = 10; x < 50; x++) for (let y = 50; y < 60; y++) w.set(x, y, WATER)
+    for (let t = 0; t < 80; t++) {
+      w.wind.addImpulse(30, 47, 3.5, -0.5, 24)
+      w.step()
+    }
+    let blown = 0
+    for (let y = 0; y < 60; y++)
+      for (let x = 56; x < 120; x++) {
+        const el = w.get(x, y)
+        if (el === WATER || el === MUD) blown++
+      }
+    expect(blown).toBeGreaterThan(15) // a visible stream left the pond
   })
 
   it('steam rides a crosswind', () => {
